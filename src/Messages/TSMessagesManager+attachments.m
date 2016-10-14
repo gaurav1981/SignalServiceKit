@@ -99,7 +99,21 @@ dispatch_queue_t attachmentsQueue() {
              inMessage:(TSOutgoingMessage *)outgoingMessage
                 thread:(TSThread *)thread
                success:(successSendingCompletionBlock)successCompletionBlock
-               failure:(failedSendingCompletionBlock)failedCompletionBlock {
+               failure:(failedSendingCompletionBlock)failedCompletionBlock
+{
+    outgoingMessage.messageState = TSOutgoingMessageStateAttemptingOut;
+    [outgoingMessage save];
+
+    // Should we have a separate stable id for the attachmentStream locally vs. what id the server gives us, since we
+    // might never get there...
+    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithIdentifier:outgoingMessage.uniqueId
+                                                                                     data:attachmentData
+                                                                                      key:[NSData new]
+                                                                              contentType:contentType];
+    [attachmentStream save];
+    [outgoingMessage.attachmentIds addObject:attachmentStream.uniqueId];
+    [outgoingMessage save];
+
     TSRequest *allocateAttachment = [[TSAllocAttachmentRequest alloc] init];
     [self.networkManager makeRequest:allocateAttachment
         success:^(NSURLSessionDataTask *task, id responseObject) {
