@@ -4,16 +4,44 @@
 #import "TSAttachment.h"
 #import "MIMETypeUtil.h"
 
+NS_ASSUME_NONNULL_BEGIN
+
+@interface TSAttachment ()
+
+@property (nonatomic, readonly) NSUInteger attachmentSchemaVersion;
+
+@end
+
 @implementation TSAttachment
 
-- (instancetype)initWithIdentifier:(NSString *)identifier
-                     encryptionKey:(NSData *)encryptionKey
-                       contentType:(NSString *)contentType {
-    self = [super initWithUniqueId:identifier];
+- (instancetype)initWithServerId:(NSUInteger)serverId
+                   encryptionKey:(NSData *)encryptionKey
+                     contentType:(NSString *)contentType
+{
+    self = [super init];
+    if (!self) {
+        return self;
+    }
 
-    if (self) {
-        _encryptionKey = encryptionKey;
-        _contentType   = contentType;
+    _serverId = serverId;
+    _encryptionKey = encryptionKey;
+    _contentType = contentType;
+
+    return self;
+}
+
+- (nullable instancetype)initWithCoder:(NSCoder *)coder
+{
+    self = [super initWithCoder:coder];
+    if (!self) {
+        return self;
+    }
+
+    if (!_serverId) {
+        _serverId = [self.uniqueId integerValue];
+        if (!_serverId) {
+            DDLogError(@"%@ failed to parse legacy uniqueId:%@ as integer.", self.tag, self.uniqueId);
+        }
     }
 
     return self;
@@ -21,12 +49,6 @@
 
 + (NSString *)collection {
     return @"TSAttachements";
-}
-
-- (NSNumber *)identifier {
-    NSNumberFormatter *f = [[NSNumberFormatter alloc] init];
-    [f setNumberStyle:NSNumberFormatterDecimalStyle];
-    return [f numberFromString:self.uniqueId];
 }
 
 - (NSString *)description {
@@ -45,4 +67,18 @@
     return attachmentString;
 }
 
+#pragma mark - Logging
+
++ (NSString *)tag
+{
+    return [NSString stringWithFormat:@"[%@]", self.class];
+}
+
+- (NSString *)tag
+{
+    return self.class.tag;
+}
+
 @end
+
+NS_ASSUME_NONNULL_END

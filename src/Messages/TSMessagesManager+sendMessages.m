@@ -613,6 +613,8 @@ dispatch_queue_t sendingQueue() {
     });
 }
 
+#pragma mark - Logging
+
 + (NSString *)logTag
 {
     return [NSString stringWithFormat:@"[%@]", self.class];

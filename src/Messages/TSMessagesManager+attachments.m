@@ -102,15 +102,8 @@ dispatch_queue_t attachmentsQueue() {
                failure:(failedSendingCompletionBlock)failedCompletionBlock
 {
     outgoingMessage.messageState = TSOutgoingMessageStateAttemptingOut;
-    [outgoingMessage save];
-
-    // Should we have a separate stable id for the attachmentStream locally vs. what id the server gives us, since we
-    // might never get there...
-    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithIdentifier:outgoingMessage.uniqueId
-                                                                                     data:attachmentData
-                                                                                      key:[NSData new]
-                                                                              contentType:contentType];
-    [attachmentStream save];
+    TSAttachmentStream *attachmentStream =
+        [[TSAttachmentStream alloc] initWithData:attachmentData contentType:contentType];
     [outgoingMessage.attachmentIds addObject:attachmentStream.uniqueId];
     [outgoingMessage save];
 
@@ -120,24 +113,21 @@ dispatch_queue_t attachmentsQueue() {
           dispatch_async(attachmentsQueue(), ^{
             if ([responseObject isKindOfClass:[NSDictionary class]]) {
                 NSDictionary *responseDict = (NSDictionary *)responseObject;
-                NSString *attachmentId = [(NSNumber *)[responseDict objectForKey:@"id"] stringValue];
-                NSString *location         = [responseDict objectForKey:@"location"];
+                NSUInteger serverId = [[responseDict objectForKey:@"id"] integerValue];
+                NSString *location = [responseDict objectForKey:@"location"];
 
-                TSAttachmentEncryptionResult *result =
-                    [Cryptography encryptAttachment:attachmentData contentType:contentType identifier:attachmentId];
-                result.pointer.isDownloaded = NO;
-                [result.pointer save];
-                outgoingMessage.body = nil;
-                [outgoingMessage.attachmentIds addObject:attachmentId];
-                if (outgoingMessage.groupMetaMessage != TSGroupMessageNew &&
-                    outgoingMessage.groupMetaMessage != TSGroupMessageUpdate) {
-                    [outgoingMessage setMessageState:TSOutgoingMessageStateAttemptingOut];
-                    [outgoingMessage save];
-                }
-                BOOL success = [self uploadDataWithProgress:result.body location:location attachmentID:attachmentId];
+                NSData *encryptionKey;
+                NSData *encryptedAttachmentData =
+                    [Cryptography encryptAttachmentData:attachmentData outKey:&encryptionKey];
+                attachmentStream.encryptionKey = encryptionKey;
+
+                BOOL success = [self uploadDataWithProgress:encryptedAttachmentData
+                                                   location:location
+                                               attachmentId:attachmentStream.uniqueId];
                 if (success) {
-                    result.pointer.isDownloaded = YES;
-                    [result.pointer save];
+                    attachmentStream.serverId = serverId;
+                    attachmentStream.isDownloaded = YES;
+                    [attachmentStream save];
                     [self sendMessage:outgoingMessage
                         inThread:thread
                         success:^{
@@ -194,7 +184,7 @@ dispatch_queue_t attachmentsQueue() {
     [self setAttachment:attachment isDownloadingInMessage:messageId];
 
     TSAttachmentRequest *attachmentRequest =
-        [[TSAttachmentRequest alloc] initWithId:[attachment identifier] relay:attachment.relay];
+        [[TSAttachmentRequest alloc] initWithId:attachment.serverId relay:attachment.relay];
 
     [self.networkManager makeRequest:attachmentRequest
         success:^(NSURLSessionDataTask *task, id responseObject) {
@@ -246,10 +236,8 @@ dispatch_queue_t attachmentsQueue() {
     if (!plaintext) {
         DDLogError(@"Failed to get attachment decrypted ...");
     } else {
-        TSAttachmentStream *stream = [[TSAttachmentStream alloc] initWithIdentifier:attachment.uniqueId
-                                                                               data:plaintext
-                                                                                key:attachment.encryptionKey
-                                                                        contentType:attachment.contentType];
+        TSAttachmentStream *stream =
+            [[TSAttachmentStream alloc] initWithData:plaintext contentType:attachment.contentType];
 
         [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
           [stream saveWithTransaction:transaction];
@@ -308,9 +296,8 @@ dispatch_queue_t attachmentsQueue() {
     return data;
 }
 
-- (BOOL)uploadDataWithProgress:(NSData *)cipherText
-                      location:(NSString *)location
-                  attachmentID:(NSString *)attachmentID {
+- (BOOL)uploadDataWithProgress:(NSData *)cipherText location:(NSString *)location attachmentId:(NSString *)attachmentId
+{
     // AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
     // manager.responseSerializer    = [AFHTTPResponseSerializer serializer];
     dispatch_semaphore_t sema = dispatch_semaphore_create(0);
@@ -333,7 +320,7 @@ dispatch_queue_t attachmentsQueue() {
                                             object:nil
                                           userInfo:@{
                                               @"progress" : @(uploadProgress.fractionCompleted),
-                                              @"attachmentID" : attachmentID
+                                              @"attachmentId" : attachmentId
                                           }];
         }
         completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {

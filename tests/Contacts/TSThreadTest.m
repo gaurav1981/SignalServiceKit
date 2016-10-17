@@ -62,10 +62,7 @@
     XCTAssertEqual(0, [thread numberOfInteractions]);
 
     TSAttachmentStream *incomingAttachment =
-        [[TSAttachmentStream alloc] initWithIdentifier:@"fake-incoming-photo-attachment-id"
-                                                  data:[[NSData alloc] init]
-                                                   key:[[NSData alloc] init]
-                                           contentType:@"image/jpeg"];
+        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
     [incomingAttachment save];
 
     // Sanity check
@@ -81,10 +78,7 @@
     [incomingMessage save];
 
     TSAttachmentStream *outgoingAttachment =
-        [[TSAttachmentStream alloc] initWithIdentifier:@"fake-outgoing-photo-attachment-id"
-                                                  data:[[NSData alloc] init]
-                                                   key:[[NSData alloc] init]
-                                           contentType:@"image/jpeg"];
+        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
     [outgoingAttachment save];
 
     // Sanity check

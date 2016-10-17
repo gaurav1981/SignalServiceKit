@@ -10,22 +10,32 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation TSAttachmentStream
 
-- (instancetype)initWithIdentifier:(NSString *)identifier
-                              data:(NSData *)data
-                               key:(NSData *)key
-                       contentType:(NSString *)contentType
+@synthesize encryptionKey = _encryptionKey,
+            serverId = _serverId,
+            contentType = _contentType;
+
+- (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType
 {
-    self = [super initWithIdentifier:identifier encryptionKey:key contentType:contentType];
+    self = [super init];
     if (!self) {
         return self;
     }
 
-    // TODO move this to save?
-    [[NSFileManager defaultManager] createFileAtPath:[self filePath] contents:data attributes:nil];
-    DDLogInfo(@"Created file at %@", [self filePath]);
+    _contentType = contentType;
     _isDownloaded = YES;
 
+    // TODO move to save?
+    [self.class writeData:data toPath:[self filePath]];
+
     return self;
+}
+
+#pragma mark - TSYapDatabaseModel overrides
+
+- (void)saveWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+
+    [super saveWithTransaction:transaction];
 }
 
 - (void)removeWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
@@ -34,14 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
     [self removeFile];
 }
 
-- (void)removeFile
-{
-    NSError *error;
-    [[NSFileManager defaultManager] removeItemAtPath:[self filePath] error:&error];
+#pragma mark - File Management
 
-    if (error) {
-        DDLogError(@"remove file errored with: %@", error);
-    }
++ (void)writeData:(NSData *)data toPath:(NSString *)path
+{
+    DDLogInfo(@"Created file at %@", path);
+    [[NSFileManager defaultManager] createFileAtPath:path contents:data attributes:nil];
 }
 
 + (NSString *)attachmentsFolder
@@ -86,6 +94,16 @@ NS_ASSUME_NONNULL_BEGIN
 {
     NSString *filePath = self.filePath;
     return filePath ? [NSURL fileURLWithPath:filePath] : nil;
+}
+
+- (void)removeFile
+{
+    NSError *error;
+    [[NSFileManager defaultManager] removeItemAtPath:[self filePath] error:&error];
+
+    if (error) {
+        DDLogError(@"remove file errored with: %@", error);
+    }
 }
 
 - (BOOL)isAnimated {

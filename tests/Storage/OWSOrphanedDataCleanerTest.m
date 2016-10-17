@@ -71,10 +71,8 @@
 
 - (void)testFilesWithoutInteractionsAreDeleted
 {
-    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithIdentifier:@"orphaned-attachment"
-                                                                                     data:[NSData new]
-                                                                                      key:[NSData new]
-                                                                              contentType:@"image/jpeg"];
+    TSAttachmentStream *attachmentStream =
+        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
 
     [attachmentStream save];
     NSString *orphanedFilePath = [attachmentStream filePath];
@@ -93,10 +91,8 @@
     TSContactThread *savedThread = [[TSContactThread alloc] initWithUniqueId:@"this-thread-exists"];
     [savedThread save];
 
-    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithIdentifier:@"legit-attachment"
-                                                                                     data:[NSData new]
-                                                                                      key:[NSData new]
-                                                                              contentType:@"image/jpeg"];
+    TSAttachmentStream *attachmentStream =
+        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
     [attachmentStream save];
 
     TSIncomingMessage *incomingMessage = [[TSIncomingMessage alloc] initWithTimestamp:1
@@ -120,10 +116,8 @@
 
 - (void)testFilesWithoutAttachmentStreamsAreDeleted
 {
-    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithIdentifier:@"orphaned-attachment"
-                                                                                     data:[NSData new]
-                                                                                      key:[NSData new]
-                                                                              contentType:@"image/jpeg"];
+    TSAttachmentStream *attachmentStream =
+        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
 
     // Intentionally not saved, because we want a lingering file.
     // This relies on a bug(?) in the current TSAttachmentStream init implementation where the file is created during

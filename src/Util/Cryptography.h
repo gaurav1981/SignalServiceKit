@@ -34,7 +34,6 @@ typedef NS_ENUM(NSInteger, TSMACType) {
 #pragma mark encrypt and decrypt attachment data
 + (NSData *)decryptAttachment:(NSData *)dataToDecrypt withKey:(NSData *)key;
 
-+ (TSAttachmentEncryptionResult *)encryptAttachment:(NSData *)attachment
-                                        contentType:(NSString *)contentType
-                                         identifier:(NSString *)identifier;
++ (NSData *)encryptAttachmentData:(NSData *)attachmentData outKey:(NSData **)outKey;
+
 @end

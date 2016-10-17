@@ -24,8 +24,10 @@
                withSyncMessage:(OWSSignalServiceProtosSyncMessage *)syncMessage;
 
 // private method we are stubbing via swizzle.
-- (BOOL)uploadDataWithProgress:(NSData *)cipherText location:(NSString *)location attachmentID:(NSString *)attachmentID;
-
+- (BOOL)uploadDataWithProgress:(NSData *)cipherText location:(NSString *)location attachmentId:(NSString *)attachmentID;
+- (NSArray<NSDictionary *> *)deviceMessages:(TSOutgoingMessage *)message
+                               forRecipient:(SignalRecipient *)recipient
+                                   inThread:(TSThread *)thread;
 @end
 
 @implementation TSMessagesManager (Testing)
@@ -61,8 +63,8 @@
 {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        [self swapOriginalSelector:@selector(uploadDataWithProgress:location:attachmentID:)
-                       replacement:@selector(stubbedUploadDataWithProgress:location:attachmentID:)];
+        [self swapOriginalSelector:@selector(uploadDataWithProgress:location:attachmentId:)
+                       replacement:@selector(stubbedUploadDataWithProgress:location:attachmentId:)];
 
         [self swapOriginalSelector:@selector(deviceMessages:forRecipient:inThread:)
                        replacement:@selector(stubbedDeviceMessages:forRecipient:inThread:)];
@@ -73,7 +75,7 @@
 
 - (BOOL)stubbedUploadDataWithProgress:(NSData *)cipherText
                              location:(NSString *)location
-                         attachmentID:(NSString *)attachmentID
+                         attachmentId:(NSString *)attachmentId
 {
     NSLog(@"Faking successful upload.");
     return YES;
@@ -103,6 +105,11 @@
 
 - (instancetype)initWithExpectation:(XCTestExpectation *)expectation
 {
+    self = [super init];
+    if (!self) {
+        return self;
+    }
+
     _expectation = expectation;
 
     return self;

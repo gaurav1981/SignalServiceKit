@@ -42,16 +42,16 @@ NS_ASSUME_NONNULL_BEGIN
     for (OWSSignalServiceProtosAttachmentPointer *attachmentProto in attachmentProtos) {
         TSAttachmentPointer *pointer;
         if (avatarGroupId) {
-            pointer = [[TSAttachmentPointer alloc] initWithIdentifier:attachmentProto.id
-                                                                  key:attachmentProto.key
-                                                          contentType:attachmentProto.contentType
-                                                                relay:relay
-                                                      avatarOfGroupId:avatarGroupId];
+            pointer = [[TSAttachmentPointer alloc] initWithServerId:attachmentProto.id
+                                                                key:attachmentProto.key
+                                                        contentType:attachmentProto.contentType
+                                                              relay:relay
+                                                    avatarOfGroupId:avatarGroupId];
         } else {
-            pointer = [[TSAttachmentPointer alloc] initWithIdentifier:attachmentProto.id
-                                                                  key:attachmentProto.key
-                                                          contentType:attachmentProto.contentType
-                                                                relay:relay];
+            pointer = [[TSAttachmentPointer alloc] initWithServerId:attachmentProto.id
+                                                                key:attachmentProto.key
+                                                        contentType:attachmentProto.contentType
+                                                              relay:relay];
         }
 
         [attachmentIds addObject:pointer.uniqueId];

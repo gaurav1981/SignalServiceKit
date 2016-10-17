@@ -175,7 +175,7 @@ NS_ASSUME_NONNULL_BEGIN
     TSAttachmentStream *attachmentStream = (TSAttachmentStream *)attachment;
 
     OWSSignalServiceProtosAttachmentPointerBuilder *builder = [OWSSignalServiceProtosAttachmentPointerBuilder new];
-    [builder setId:[attachmentStream.identifier unsignedLongLongValue]];
+    [builder setId:attachmentStream.serverId];
     [builder setContentType:attachmentStream.contentType];
     [builder setKey:attachmentStream.encryptionKey];
 
