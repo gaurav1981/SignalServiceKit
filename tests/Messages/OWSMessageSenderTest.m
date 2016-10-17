@@ -55,7 +55,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithSuccess:(BOOL)shouldSucceed
 {
-    // intentionally skipping super init which explodes without setup.
+    self = [super init];
+    if (!self) {
+        return self;
+    }
+
     _shouldSucceed = shouldSucceed;
 
     return self;
