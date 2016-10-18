@@ -10,6 +10,6 @@
 
 @interface TSAttachmentRequest : TSRequest
 
-- (TSRequest *)initWithId:(NSUInteger)attachmentId relay:(NSString *)relay;
+- (TSRequest *)initWithId:(UInt64)attachmentId relay:(NSString *)relay;
 
 @end

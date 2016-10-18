@@ -4,8 +4,10 @@
 #import "OWSError.h"
 #import "OWSFakeContactsManager.h"
 #import "OWSFakeContactsUpdater.h"
+#import "OWSFakeNetworkManager.h"
 #import "OWSMessageSender.h"
 #import "TSContactThread.h"
+#import "TSMessagesManager.h"
 #import "TSNetworkManager.h"
 #import "TSOutgoingMessage.h"
 #import "TSStorageManager+keyingMaterial.h"
@@ -13,6 +15,37 @@
 #import <XCTest/XCTest.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+@interface OWSFakeMessagesManager : TSMessagesManager
+
+@end
+
+@implementation OWSFakeMessagesManager
+
+- (NSArray<NSDictionary *> *)deviceMessages:(TSOutgoingMessage *)message
+                               forRecipient:(SignalRecipient *)recipient
+                                   inThread:(TSThread *)thread
+{
+    NSLog(@"[OWSFakeMessagesManager] Faking deviceMessages.");
+    return @[];
+}
+
+@end
+
+@interface OWSMessageSender (Testing)
+
+- (void)setMessagesManager:(TSMessagesManager *)messagesManager;
+
+@end
+
+@implementation OWSMessageSender (Testing)
+
+- (void)setMessagesManager:(TSMessagesManager *)messagesManager
+{
+    _messagesManager = messagesManager;
+}
+
+@end
 
 @interface OWSFakeURLSessionDataTask : NSURLSessionDataTask
 
@@ -42,7 +75,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-@interface OWSMessageSenderFakeNetworkManager : TSNetworkManager
+@interface OWSMessageSenderFakeNetworkManager : OWSFakeNetworkManager
 
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithSuccess:(BOOL)shouldSucceed NS_DESIGNATED_INITIALIZER;
@@ -79,7 +112,7 @@ NS_ASSUME_NONNULL_BEGIN
             failure(task, error);
         }
     } else {
-        NSLog(@"Ignoring unhandled request: %@", request);
+        [super makeRequest:request success:success failure:failure];
     }
 }
 
@@ -115,24 +148,38 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testExpiringMessageTimerStartsOnSuccess
 {
+    // Successful network manager
     TSNetworkManager *networkManager = [[OWSMessageSenderFakeNetworkManager alloc] initWithSuccess:YES];
-    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithMessage:self.expiringMessage
-                                                                 networkManager:networkManager
-                                                                 storageManager:[TSStorageManager sharedManager]
-                                                                contactsManager:[OWSFakeContactsManager new]
-                                                                contactsUpdater:[OWSFakeContactsUpdater new]];
+
+
+    TSStorageManager *storageManager = [TSStorageManager sharedManager];
+    OWSFakeContactsManager *contactsManager = [OWSFakeContactsManager new];
+    OWSFakeContactsUpdater *contactsUpdater = [OWSFakeContactsUpdater new];
+
+    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
+                                                                        storageManager:storageManager
+                                                                       contactsManager:contactsManager
+                                                                       contactsUpdater:contactsUpdater];
+
+    TSMessagesManager *fakeMessagesManager = [[OWSFakeMessagesManager alloc] initWithNetworkManager:networkManager
+                                                                                     storageManager:storageManager
+                                                                                    contactsManager:contactsManager
+                                                                                    contactsUpdater:contactsUpdater
+                                                                                      messageSender:messageSender];
+    messageSender.messagesManager = fakeMessagesManager;
 
     // Sanity Check
     XCTAssertEqual(0, self.expiringMessage.expiresAt);
 
     XCTestExpectation *messageStartedExpiration = [self expectationWithDescription:@"messageStartedExpiration"];
-    [messageSender sendWithSuccess:^() {
-        if (self.expiringMessage.expiresAt > 0) {
-            [messageStartedExpiration fulfill];
-        } else {
-            XCTFail(@"Message expiration was supposed to start.");
+    [messageSender sendMessage:self.expiringMessage
+        success:^() {
+            if (self.expiringMessage.expiresAt > 0) {
+                [messageStartedExpiration fulfill];
+            } else {
+                XCTFail(@"Message expiration was supposed to start.");
+            }
         }
-    }
         failure:^(NSError *error) {
             XCTFail(@"Message failed to send");
         }];
@@ -145,20 +192,34 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testExpiringMessageTimerDoesNotStartsOnFailure
 {
+    // Unsuccessful network manager
     TSNetworkManager *networkManager = [[OWSMessageSenderFakeNetworkManager alloc] initWithSuccess:NO];
-    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithMessage:self.expiringMessage
-                                                                 networkManager:networkManager
-                                                                 storageManager:[TSStorageManager sharedManager]
-                                                                contactsManager:[OWSFakeContactsManager new]
-                                                                contactsUpdater:[OWSFakeContactsUpdater new]];
+
+
+    TSStorageManager *storageManager = [TSStorageManager sharedManager];
+    OWSFakeContactsManager *contactsManager = [OWSFakeContactsManager new];
+    OWSFakeContactsUpdater *contactsUpdater = [OWSFakeContactsUpdater new];
+
+    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
+                                                                        storageManager:storageManager
+                                                                       contactsManager:contactsManager
+                                                                       contactsUpdater:contactsUpdater];
+
+    TSMessagesManager *fakeMessagesManager = [[OWSFakeMessagesManager alloc] initWithNetworkManager:networkManager
+                                                                                     storageManager:storageManager
+                                                                                    contactsManager:contactsManager
+                                                                                    contactsUpdater:contactsUpdater
+                                                                                      messageSender:messageSender];
+    messageSender.messagesManager = fakeMessagesManager;
 
     // Sanity Check
     XCTAssertEqual(0, self.expiringMessage.expiresAt);
 
     XCTestExpectation *messageDidNotStartExpiration = [self expectationWithDescription:@"messageStartedExpiration"];
-    [messageSender sendWithSuccess:^() {
-        XCTFail(@"Message sending was supposed to fail.");
-    }
+    [messageSender sendMessage:self.expiringMessage
+        success:^() {
+            XCTFail(@"Message sending was supposed to fail.");
+        }
         failure:^(NSError *error) {
             if (self.expiringMessage.expiresAt == 0) {
                 [messageDidNotStartExpiration fulfill];

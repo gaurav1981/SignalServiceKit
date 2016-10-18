@@ -5,6 +5,8 @@
 #import "MIMETypeUtil.h"
 #import "NSDate+millisecondTimeStamp.h"
 #import "OWSAttachmentsProcessor.h"
+#import "OWSDispatch.h"
+#import "OWSUploadingService.h"
 #import "TSAttachmentPointer.h"
 #import "TSContactThread.h"
 #import "TSGroupModel.h"
@@ -14,21 +16,6 @@
 #import "TSNetworkManager.h"
 #import <YapDatabase/YapDatabaseConnection.h>
 #import <YapDatabase/YapDatabaseTransaction.h>
-
-@interface TSMessagesManager ()
-
-dispatch_queue_t attachmentsQueue(void);
-
-@end
-
-dispatch_queue_t attachmentsQueue() {
-    static dispatch_once_t queueCreationGuard;
-    static dispatch_queue_t queue;
-    dispatch_once(&queueCreationGuard, ^{
-      queue = dispatch_queue_create("org.whispersystems.signal.attachments", NULL);
-    });
-    return queue;
-}
 
 @implementation TSMessagesManager (attachments)
 
@@ -46,13 +33,13 @@ dispatch_queue_t attachmentsQueue() {
 
     TSThread *thread = [self threadForEnvelope:envelope dataMessage:dataMessage];
 
-    OWSAttachmentsProcessor *attachmentsProcessor = [[OWSAttachmentsProcessor alloc]
-        initWithAttachmentPointersProtos:attachmentPointerProtos
-                               timestamp:envelope.timestamp
-                                   relay:envelope.relay
-                           avatarGroupId:avatarGroupId
-                                inThread:thread
-                         messagesManager:[TSMessagesManager sharedManager]]; // TODO self?
+    OWSAttachmentsProcessor *attachmentsProcessor =
+        [[OWSAttachmentsProcessor alloc] initWithAttachmentPointersProtos:attachmentPointerProtos
+                                                                timestamp:envelope.timestamp
+                                                                    relay:envelope.relay
+                                                            avatarGroupId:avatarGroupId
+                                                                 inThread:thread
+                                                          messagesManager:self];
 
     if (attachmentsProcessor.hasSupportedAttachments) {
         TSIncomingMessage *possiblyCreatedMessage =
@@ -61,123 +48,6 @@ dispatch_queue_t attachmentsQueue() {
                            attachmentIds:attachmentsProcessor.supportedAttachmentIds];
         [attachmentsProcessor fetchAttachmentsForMessageId:possiblyCreatedMessage.uniqueId];
     }
-}
-
-- (void)sendTemporaryAttachment:(NSData *)attachmentData
-                    contentType:(NSString *)contentType
-                      inMessage:(TSOutgoingMessage *)outgoingMessage
-                         thread:(TSThread *)thread
-                        success:(successSendingCompletionBlock)successCompletionBlock
-                        failure:(failedSendingCompletionBlock)failedCompletionBlock
-{
-    void (^successBlockWithDelete)() = ^{
-        if (successCompletionBlock) {
-            successCompletionBlock();
-        }
-        DDLogDebug(@"Removing temporary attachment message.");
-        [outgoingMessage remove];
-    };
-
-    void (^failureBlockWithDelete)() = ^{
-        if (failedCompletionBlock) {
-            failedCompletionBlock();
-        }
-        DDLogDebug(@"Removing temporary attachment message.");
-        [outgoingMessage remove];
-    };
-
-    [self sendAttachment:attachmentData
-             contentType:contentType
-               inMessage:outgoingMessage
-                  thread:thread
-                 success:successBlockWithDelete
-                 failure:failureBlockWithDelete];
-}
-
-- (void)sendAttachment:(NSData *)attachmentData
-           contentType:(NSString *)contentType
-             inMessage:(TSOutgoingMessage *)outgoingMessage
-                thread:(TSThread *)thread
-               success:(successSendingCompletionBlock)successCompletionBlock
-               failure:(failedSendingCompletionBlock)failedCompletionBlock
-{
-    outgoingMessage.messageState = TSOutgoingMessageStateAttemptingOut;
-    TSAttachmentStream *attachmentStream =
-        [[TSAttachmentStream alloc] initWithData:attachmentData contentType:contentType];
-    [outgoingMessage.attachmentIds addObject:attachmentStream.uniqueId];
-    [outgoingMessage save];
-
-    TSRequest *allocateAttachment = [[TSAllocAttachmentRequest alloc] init];
-    [self.networkManager makeRequest:allocateAttachment
-        success:^(NSURLSessionDataTask *task, id responseObject) {
-          dispatch_async(attachmentsQueue(), ^{
-            if ([responseObject isKindOfClass:[NSDictionary class]]) {
-                NSDictionary *responseDict = (NSDictionary *)responseObject;
-                NSUInteger serverId = [[responseDict objectForKey:@"id"] integerValue];
-                NSString *location = [responseDict objectForKey:@"location"];
-
-                NSData *encryptionKey;
-                NSData *encryptedAttachmentData =
-                    [Cryptography encryptAttachmentData:attachmentData outKey:&encryptionKey];
-                attachmentStream.encryptionKey = encryptionKey;
-
-                BOOL success = [self uploadDataWithProgress:encryptedAttachmentData
-                                                   location:location
-                                               attachmentId:attachmentStream.uniqueId];
-                if (success) {
-                    attachmentStream.serverId = serverId;
-                    attachmentStream.isDownloaded = YES;
-                    [attachmentStream save];
-                    [self sendMessage:outgoingMessage
-                        inThread:thread
-                        success:^{
-                          if (successCompletionBlock) {
-                              successCompletionBlock();
-                          }
-                        }
-                        failure:^{
-                          if (failedCompletionBlock) {
-                              failedCompletionBlock();
-                          }
-                        }];
-                } else {
-                    if (failedCompletionBlock) {
-                        failedCompletionBlock();
-                    }
-                    DDLogWarn(@"Failed to upload attachment");
-                }
-            } else {
-                if (failedCompletionBlock) {
-                    failedCompletionBlock();
-                }
-                DDLogError(@"The server didn't returned an empty responseObject");
-            }
-          });
-        }
-        failure:^(NSURLSessionDataTask *task, NSError *error) {
-          if (failedCompletionBlock) {
-              failedCompletionBlock();
-          }
-          DDLogError(@"Failed to get attachment allocated: %@", error);
-        }];
-}
-
-- (void)sendAttachment:(NSData *)attachmentData
-           contentType:(NSString *)contentType
-                thread:(TSThread *)thread
-               success:(successSendingCompletionBlock)successCompletionBlock
-               failure:(failedSendingCompletionBlock)failedCompletionBlock
-{
-    TSOutgoingMessage *message = [[TSOutgoingMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
-                                                                     inThread:thread
-                                                                  messageBody:nil
-                                                                attachmentIds:[NSMutableArray new]];
-    [self sendAttachment:attachmentData
-             contentType:contentType
-               inMessage:message
-                  thread:thread
-                 success:successCompletionBlock
-                 failure:failedCompletionBlock];
 }
 
 - (void)retrieveAttachment:(TSAttachmentPointer *)attachment messageId:(NSString *)messageId {
@@ -189,7 +59,7 @@ dispatch_queue_t attachmentsQueue() {
     [self.networkManager makeRequest:attachmentRequest
         success:^(NSURLSessionDataTask *task, id responseObject) {
           if ([responseObject isKindOfClass:[NSDictionary class]]) {
-              dispatch_async(attachmentsQueue(), ^{
+              dispatch_async([OWSDispatch attachmentsQueue], ^{
                 NSString *location = [(NSDictionary *)responseObject objectForKey:@"location"];
 
                 NSData *data = [self downloadFromLocation:location pointer:attachment messageId:messageId];
@@ -294,53 +164,6 @@ dispatch_queue_t attachmentsQueue() {
     dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
 
     return data;
-}
-
-- (BOOL)uploadDataWithProgress:(NSData *)cipherText location:(NSString *)location attachmentId:(NSString *)attachmentId
-{
-    // AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
-    // manager.responseSerializer    = [AFHTTPResponseSerializer serializer];
-    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
-    __block BOOL success      = NO;
-
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:location]];
-    request.HTTPMethod           = @"PUT";
-    request.HTTPBody             = cipherText;
-    [request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-        initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-        fromData:cipherText
-        progress:^(NSProgress *_Nonnull uploadProgress) {
-          NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
-          [notificationCenter postNotificationName:@"attachmentUploadProgress"
-                                            object:nil
-                                          userInfo:@{
-                                              @"progress" : @(uploadProgress.fractionCompleted),
-                                              @"attachmentId" : attachmentId
-                                          }];
-        }
-        completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-          NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
-          BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
-          if (!error && isValidResponse) {
-              success = YES;
-              dispatch_semaphore_signal(sema);
-          } else {
-              DDLogError(@"Failed uploading attachment with error: %@", error.description);
-              success = NO;
-              dispatch_semaphore_signal(sema);
-          }
-        }];
-
-    [uploadTask resume];
-
-    dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
-
-    return success;
 }
 
 @end

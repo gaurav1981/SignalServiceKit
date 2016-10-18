@@ -7,6 +7,8 @@
 #import "ContactsUpdater.h"
 #import "OWSFakeContactsManager.h"
 #import "OWSFakeContactsUpdater.h"
+#import "OWSFakeNetworkManager.h"
+#import "OWSMessageSender.h"
 #import "OWSSignalServiceProtos.pb.h"
 #import "TSMessagesManager.h"
 #import "TSNetworkManager.h"
@@ -23,85 +25,15 @@
 - (void)handleIncomingEnvelope:(OWSSignalServiceProtosEnvelope *)messageEnvelope
                withSyncMessage:(OWSSignalServiceProtosSyncMessage *)syncMessage;
 
-// private method we are stubbing via swizzle.
-- (BOOL)uploadDataWithProgress:(NSData *)cipherText location:(NSString *)location attachmentId:(NSString *)attachmentID;
-- (NSArray<NSDictionary *> *)deviceMessages:(TSOutgoingMessage *)message
-                               forRecipient:(SignalRecipient *)recipient
-                                   inThread:(TSThread *)thread;
 @end
 
-@implementation TSMessagesManager (Testing)
+@interface OWSFakeMessageSender : OWSMessageSender
 
-+ (void)swapOriginalSelector:(SEL)originalSelector replacement:(SEL)replacementSelector
-{
-    Class class = [self class];
-    Method originalMethod = class_getInstanceMethod(class, originalSelector);
-    Method replacementMethod = class_getInstanceMethod(class, replacementSelector);
-
-    // When swizzling a class method, use the following:
-    // Class class = object_getClass((id)self);
-    // ...
-    // Method originalMethod = class_getClassMethod(class, originalSelector);
-    // Method swizzledMethod = class_getClassMethod(class, swizzledSelector);
-
-    BOOL didAddMethod = class_addMethod(class,
-        originalSelector,
-        method_getImplementation(replacementMethod),
-        method_getTypeEncoding(replacementMethod));
-
-    if (didAddMethod) {
-        class_replaceMethod(class,
-            replacementSelector,
-            method_getImplementation(originalMethod),
-            method_getTypeEncoding(originalMethod));
-    } else {
-        method_exchangeImplementations(originalMethod, replacementMethod);
-    }
-}
-
-+ (void)load
-{
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        [self swapOriginalSelector:@selector(uploadDataWithProgress:location:attachmentId:)
-                       replacement:@selector(stubbedUploadDataWithProgress:location:attachmentId:)];
-
-        [self swapOriginalSelector:@selector(deviceMessages:forRecipient:inThread:)
-                       replacement:@selector(stubbedDeviceMessages:forRecipient:inThread:)];
-    });
-}
-
-#pragma mark - Method Swizzling
-
-- (BOOL)stubbedUploadDataWithProgress:(NSData *)cipherText
-                             location:(NSString *)location
-                         attachmentId:(NSString *)attachmentId
-{
-    NSLog(@"Faking successful upload.");
-    return YES;
-}
-
-- (NSArray<NSDictionary *> *)stubbedDeviceMessages:(TSOutgoingMessage *)message
-                                      forRecipient:(SignalRecipient *)recipient
-                                          inThread:(TSThread *)thread
-{
-    // Upon originally provisioning, we won't have a device to send to.
-    NSLog(@"Stubbed device message to return empty list.");
-    return @[];
-}
+@property (nonatomic, readonly) XCTestExpectation *expectation;
 
 @end
 
-
-@interface OWSTSMessagesManagerTestNetworkManager : TSNetworkManager
-
-- (instancetype)initWithExpectation:(XCTestExpectation *)messageWasSubmitted;
-
-@property XCTestExpectation *expectation;
-
-@end
-
-@implementation OWSTSMessagesManagerTestNetworkManager
+@implementation OWSFakeMessageSender
 
 - (instancetype)initWithExpectation:(XCTestExpectation *)expectation
 {
@@ -115,18 +47,16 @@
     return self;
 }
 
-- (void)makeRequest:(TSRequest *)request
-            success:(void (^)(NSURLSessionDataTask *task, id responseObject))success
-            failure:(void (^)(NSURLSessionDataTask *task, NSError *error))failure
+- (void)sendTemporaryAttachmentData:(NSData *)attachmentData
+                        contentType:(NSString *)contentType
+                          inMessage:(TSOutgoingMessage *)outgoingMessage
+                            success:(void (^)())successHandler
+                            failure:(void (^)(NSError *error))failureHandler
 {
-    if ([request isKindOfClass:[TSAllocAttachmentRequest class]]) {
-        NSDictionary *fakeResponse = @{ @"id" : @(1234), @"location" : @"fake-location" };
-        success(nil, fakeResponse);
-    } else if ([request isKindOfClass:[TSSubmitMessageRequest class]]) {
-        [self.expectation fulfill];
-    } else {
-        NSLog(@"Ignoring unhandled request: %@", request);
-    }
+
+    NSLog(@"Faking sendTemporyAttachmentData.");
+    [self.expectation fulfill];
+    successHandler();
 }
 
 @end
@@ -135,16 +65,16 @@
 
 - (void)testIncomingSyncContactMessage
 {
-    OWSFakeContactsUpdater *fakeContactsUpdater = [OWSFakeContactsUpdater new];
-    XCTestExpectation *messageWasSubmitted = [self expectationWithDescription:@"message was submitted"];
-    OWSTSMessagesManagerTestNetworkManager *fakeNetworkManager =
-        [[OWSTSMessagesManagerTestNetworkManager alloc] initWithExpectation:messageWasSubmitted];
-    OWSFakeContactsManager *fakeContactsManager = [OWSFakeContactsManager new];
+    XCTestExpectation *messageWasSent = [self expectationWithDescription:@"message was sent"];
+
+    OWSFakeMessageSender *messageSender = [[OWSFakeMessageSender alloc] initWithExpectation:messageWasSent];
+
     TSMessagesManager *messagesManager =
-        [[TSMessagesManager alloc] initWithNetworkManager:fakeNetworkManager
+        [[TSMessagesManager alloc] initWithNetworkManager:[OWSFakeNetworkManager new]
                                            storageManager:[TSStorageManager sharedManager]
-                                          contactsManager:fakeContactsManager
-                                          contactsUpdater:fakeContactsUpdater];
+                                          contactsManager:[OWSFakeContactsManager new]
+                                          contactsUpdater:[OWSFakeContactsUpdater new]
+                                            messageSender:messageSender];
 
     OWSSignalServiceProtosEnvelopeBuilder *envelopeBuilder = [OWSSignalServiceProtosEnvelopeBuilder new];
     OWSSignalServiceProtosSyncMessageBuilder *messageBuilder = [OWSSignalServiceProtosSyncMessageBuilder new];

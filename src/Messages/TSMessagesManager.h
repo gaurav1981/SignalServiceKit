@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 @class OWSSignalServiceProtosDataMessage;
 @class ContactsUpdater;
 @class OWSDisappearingMessagesJob;
+@class OWSMessageSender;
 @protocol ContactsManagerProtocol;
 
 @interface TSMessagesManager : NSObject
@@ -20,7 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
                         storageManager:(TSStorageManager *)storageManager
                        contactsManager:(id<ContactsManagerProtocol>)contactsManager
-                       contactsUpdater:(ContactsUpdater *)contactsUpdater NS_DESIGNATED_INITIALIZER;
+                       contactsUpdater:(ContactsUpdater *)contactsUpdater
+                         messageSender:(OWSMessageSender *)messageSender NS_DESIGNATED_INITIALIZER;
 
 + (instancetype)sharedManager;
 

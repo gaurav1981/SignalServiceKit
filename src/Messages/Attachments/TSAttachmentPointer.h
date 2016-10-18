@@ -10,12 +10,12 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface TSAttachmentPointer : TSAttachment
 
-- (instancetype)initWithServerId:(NSUInteger)serverId
+- (instancetype)initWithServerId:(UInt64)serverId
                              key:(NSData *)key
                      contentType:(NSString *)contentType
                            relay:(NSString *)relay NS_DESIGNATED_INITIALIZER;
 
-- (instancetype)initWithServerId:(NSUInteger)serverId
+- (instancetype)initWithServerId:(UInt64)serverId
                              key:(NSData *)key
                      contentType:(NSString *)contentType
                            relay:(NSString *)relay

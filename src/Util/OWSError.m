@@ -13,4 +13,10 @@ NSError *OWSErrorWithCodeDescription(OWSErrorCode code, NSString *description)
                            userInfo:@{ NSLocalizedDescriptionKey: description }];
 }
 
+NSError *OWSErrorMakeUnableToProcessServerResponseError()
+{
+    return OWSErrorWithCodeDescription(OWSErrorCodeUnableToProcessServerResponse,
+        NSLocalizedString(@"ERROR_DESCRIPTION_TRY_AGAIN_LATER", @"Generic server error"));
+}
+
 NS_ASSUME_NONNULL_END

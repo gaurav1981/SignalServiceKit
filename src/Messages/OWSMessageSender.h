@@ -7,17 +7,47 @@ NS_ASSUME_NONNULL_BEGIN
 @class TSNetworkManager;
 @class TSStorageManager;
 @class ContactsUpdater;
+@class TSMessagesManager;
 @protocol ContactsManagerProtocol;
 
-@interface OWSMessageSender : NSObject
+@interface OWSMessageSender : NSObject {
 
-- (instancetype)initWithMessage:(TSOutgoingMessage *)message
-                 networkManager:(TSNetworkManager *)networkManager
-                 storageManager:(TSStorageManager *)storageManager
-                contactsManager:(id<ContactsManagerProtocol>)contactsManager
-                contactsUpdater:(ContactsUpdater *)contactsUpdater;
+@protected
+    // For subclassing in tests
+    TSMessagesManager *_messagesManager;
+}
 
-- (void)sendWithSuccess:(void (^)())successBlock failure:(void (^)(NSError *error))failureBlock;
+- (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
+                        storageManager:(TSStorageManager *)storageManager
+                       contactsManager:(id<ContactsManagerProtocol>)contactsManager
+                       contactsUpdater:(ContactsUpdater *)contactsUpdater;
+
+/**
+ * Send and resend text messages or resend messages with existing attachments.
+ * If you haven't yet created the attachment, see the `sendAttachmentData:` variants.
+ */
+- (void)sendMessage:(TSOutgoingMessage *)message
+            success:(void (^)())successHandler
+            failure:(void (^)(NSError *error))failureHandler;
+
+/**
+ * Takes care of allocating and uploading the attachment, then sends the message.
+ * Only necessary to call once. If sending fails, retry with `sendMessage:`.
+ */
+- (void)sendAttachmentData:(NSData *)attachmentData
+               contentType:(NSString *)contentType
+                 inMessage:(TSOutgoingMessage *)outgoingMessage
+                   success:(void (^)())successHandler
+                   failure:(void (^)(NSError *error))failureHandler;
+/**
+ * Same as `sendAttachmentData:`, but deletes the local copy of the attachment after sending.
+ * Used for sending sync request data, not for user visible attachments.
+ */
+- (void)sendTemporaryAttachmentData:(NSData *)attachmentData
+                        contentType:(NSString *)contentType
+                          inMessage:(TSOutgoingMessage *)outgoingMessage
+                            success:(void (^)())successHandler
+                            failure:(void (^)(NSError *error))failureHandler;
 
 @end
 

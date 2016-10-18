@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation TSAttachment
 
-- (instancetype)initWithServerId:(NSUInteger)serverId
+- (instancetype)initWithServerId:(UInt64)serverId
                    encryptionKey:(NSData *)encryptionKey
                      contentType:(NSString *)contentType
 {

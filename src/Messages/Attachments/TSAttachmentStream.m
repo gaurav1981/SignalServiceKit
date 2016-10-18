@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
     _isDownloaded = YES;
 
     // TODO move to save?
-    [self.class writeData:data toPath:[self filePath]];
+    [self writeData:data];
 
     return self;
 }
@@ -46,10 +46,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - File Management
 
-+ (void)writeData:(NSData *)data toPath:(NSString *)path
+- (nullable NSData *)readDataFromFile
 {
-    DDLogInfo(@"Created file at %@", path);
-    [[NSFileManager defaultManager] createFileAtPath:path contents:data attributes:nil];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:self.filePath]) {
+        DDLogError(@"%@ Can't read data for non existant file at path:%@", self.tag, self.filePath);
+        return nil;
+    }
+
+    return [NSData dataWithContentsOfFile:self.filePath];
+}
+
+- (void)writeData:(NSData *)data
+{
+    DDLogInfo(@"%@ Created file at %@", self.tag, self.filePath);
+    [[NSFileManager defaultManager] createFileAtPath:self.filePath contents:data attributes:nil];
 }
 
 + (NSString *)attachmentsFolder
@@ -102,7 +112,7 @@ NS_ASSUME_NONNULL_BEGIN
     [[NSFileManager defaultManager] removeItemAtPath:[self filePath] error:&error];
 
     if (error) {
-        DDLogError(@"remove file errored with: %@", error);
+        DDLogError(@"%@ remove file errored with: %@", self.tag, error);
     }
 }
 
@@ -150,6 +160,18 @@ NS_ASSUME_NONNULL_BEGIN
     if (error) {
         DDLogError(@"Failed to delete attachment folder with error: %@", error.debugDescription);
     }
+}
+
+#pragma mark - Logging
+
++ (NSString *)tag
+{
+    return [NSString stringWithFormat:@"[%@]", self.class];
+}
+
+- (NSString *)tag
+{
+    return self.class.tag;
 }
 
 @end

@@ -7,11 +7,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TSAttachment : TSYapDatabaseObject
 
-@property (nonatomic, readonly) NSUInteger serverId;
+@property (nonatomic, readonly) UInt64 serverId;
 @property (atomic, readonly) NSData *encryptionKey;
 @property (nonatomic, readonly) NSString *contentType;
 
-- (instancetype)initWithServerId:(NSUInteger)serverId
+- (instancetype)initWithServerId:(UInt64)serverId
                    encryptionKey:(NSData *)encryptionKey
                      contentType:(NSString *)contentType;
 

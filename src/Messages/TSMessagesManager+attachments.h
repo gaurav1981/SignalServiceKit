@@ -17,24 +17,6 @@
 - (void)handleReceivedMediaWithEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
                             dataMessage:(OWSSignalServiceProtosDataMessage *)message;
 
-- (void)sendAttachment:(NSData *)attachmentData
-           contentType:(NSString *)contentType
-             inMessage:(TSOutgoingMessage *)outgoingMessage
-                thread:(TSThread *)thread
-               success:(successSendingCompletionBlock)successCompletionBlock
-               failure:(failedSendingCompletionBlock)failedCompletionBlock;
-
-/**
- * Delete the local copy of the attachment after sending. Used for sending sync request data, not for user visible
- * attachments.
- */
-- (void)sendTemporaryAttachment:(NSData *)attachmentData
-                    contentType:(NSString *)contentType
-                      inMessage:(TSOutgoingMessage *)outgoingMessage
-                         thread:(TSThread *)thread
-                        success:(successSendingCompletionBlock)successCompletionBlock
-                        failure:(failedSendingCompletionBlock)failedCompletionBlock;
-
 - (void)retrieveAttachment:(TSAttachmentPointer *)attachment messageId:(NSString *)messageId;
 
 @end

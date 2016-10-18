@@ -11,6 +11,7 @@
 #import "OWSDisappearingMessagesConfiguration.h"
 #import "OWSDisappearingMessagesJob.h"
 #import "OWSIncomingSentMessageTranscript.h"
+#import "OWSMessageSender.h"
 #import "OWSReadReceiptsProcessor.h"
 #import "OWSRecordTranscriptJob.h"
 #import "OWSSyncContactsMessage.h"
@@ -37,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) id<ContactsManagerProtocol> contactsManager;
 @property (nonatomic, readonly) TSStorageManager *storageManager;
+@property (nonatomic, readonly) OWSMessageSender *messageSender;
 
 @end
 
@@ -53,16 +55,27 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)init
 {
-    return [self initWithNetworkManager:[TSNetworkManager sharedManager]
-                         storageManager:[TSStorageManager sharedManager]
-                        contactsManager:[TextSecureKitEnv sharedEnv].contactsManager
-                        contactsUpdater:[ContactsUpdater sharedUpdater]];
+    TSNetworkManager *networkManager = [TSNetworkManager sharedManager];
+    TSStorageManager *storageManager = [TSStorageManager sharedManager];
+    id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
+    ContactsUpdater *contactsUpdater = [ContactsUpdater sharedUpdater];
+    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
+                                                                        storageManager:storageManager
+                                                                       contactsManager:contactsManager
+                                                                       contactsUpdater:contactsUpdater];
+
+    return [self initWithNetworkManager:networkManager
+                         storageManager:storageManager
+                        contactsManager:contactsManager
+                        contactsUpdater:contactsUpdater
+                          messageSender:messageSender];
 }
 
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
                         storageManager:(TSStorageManager *)storageManager
                        contactsManager:(id<ContactsManagerProtocol>)contactsManager
                        contactsUpdater:(ContactsUpdater *)contactsUpdater
+                         messageSender:(OWSMessageSender *)messageSender
 {
     self = [super init];
 
@@ -74,6 +87,7 @@ NS_ASSUME_NONNULL_BEGIN
     _networkManager = networkManager;
     _contactsManager = contactsManager;
     _contactsUpdater = contactsUpdater;
+    _messageSender = messageSender;
 
     _dbConnection = storageManager.newDatabaseConnection;
     _disappearingMessagesJob = [[OWSDisappearingMessagesJob alloc] initWithStorageManager:storageManager];
@@ -282,15 +296,14 @@ NS_ASSUME_NONNULL_BEGIN
             OWSSyncContactsMessage *syncContactsMessage =
                 [[OWSSyncContactsMessage alloc] initWithContactsManager:self.contactsManager];
 
-            [self sendTemporaryAttachment:[syncContactsMessage buildPlainTextAttachmentData]
+            [self.messageSender sendTemporaryAttachmentData:[syncContactsMessage buildPlainTextAttachmentData]
                 contentType:OWSMimeTypeApplicationOctetStream
                 inMessage:syncContactsMessage
-                thread:nil
                 success:^{
                     DDLogInfo(@"%@ Successfully sent Contacts response syncMessage.", self.tag);
                 }
-                failure:^{
-                    DDLogError(@"%@ Failed to send Contacts response syncMessage.", self.tag);
+                failure:^(NSError *error) {
+                    DDLogError(@"%@ Failed to send Contacts response syncMessage with error: %@", self.tag, error);
                 }];
 
         } else if (syncMessage.request.type == OWSSignalServiceProtosSyncMessageRequestTypeGroups) {
@@ -298,15 +311,14 @@ NS_ASSUME_NONNULL_BEGIN
 
             OWSSyncGroupsMessage *syncGroupsMessage = [[OWSSyncGroupsMessage alloc] init];
 
-            [self sendTemporaryAttachment:[syncGroupsMessage buildPlainTextAttachmentData]
+            [self.messageSender sendTemporaryAttachmentData:[syncGroupsMessage buildPlainTextAttachmentData]
                 contentType:OWSMimeTypeApplicationOctetStream
                 inMessage:syncGroupsMessage
-                thread:nil
                 success:^{
                     DDLogInfo(@"%@ Successfully sent Groups response syncMessage.", self.tag);
                 }
-                failure:^{
-                    DDLogError(@"%@ Failed to send Groups response syncMessage.", self.tag);
+                failure:^(NSError *error) {
+                    DDLogError(@"%@ Failed to send Groups response syncMessage with error: %@", self.tag, error);
                 }];
         }
     } else if (syncMessage.read.count > 0) {
