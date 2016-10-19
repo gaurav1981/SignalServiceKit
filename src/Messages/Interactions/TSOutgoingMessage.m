@@ -10,6 +10,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+NSString *const TAG = @"[TSOutgoingMessage]";
+
 @implementation TSOutgoingMessage
 
 - (instancetype)initWithCoder:(NSCoder *)coder
@@ -87,6 +89,16 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     return self;
+}
+
+- (void)saveWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
+{
+    if (self.groupMetaMessage == TSGroupMessageNew || self.groupMetaMessage == TSGroupMessageUpdate) {
+        DDLogDebug(@"%@ Skipping save for group meta message.", TAG);
+        return;
+    }
+
+    [super saveWithTransaction:transaction];
 }
 
 - (nullable NSString *)recipientIdentifier
