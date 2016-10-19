@@ -3,6 +3,7 @@
 
 #import "TSAttachmentStream.h"
 #import "MIMETypeUtil.h"
+#import "TSAttachmentPointer.h"
 #import <AVFoundation/AVFoundation.h>
 #import <YapDatabase/YapDatabaseTransaction.h>
 
@@ -22,6 +23,24 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     _contentType = contentType;
+    _isDownloaded = YES;
+
+    // TODO move to save?
+    [self writeData:data];
+
+    return self;
+}
+
+- (instancetype)initWithPointer:(TSAttachmentPointer *)pointer decryptedData:(NSData *)data
+{
+    // Once downloaded, AttachmentStream will replace the AttachmentPointer in the attachments collection.
+    self = [super initWithUniqueId:pointer.uniqueId];
+
+    if (!self) {
+        return self;
+    }
+
+    _contentType = pointer.contentType;
     _isDownloaded = YES;
 
     // TODO move to save?

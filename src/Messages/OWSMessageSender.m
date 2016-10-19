@@ -86,11 +86,10 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
 
-    [self.uploadingService uploadData:attachmentStream.readDataFromFile
-                          contentType:attachmentStream.contentType
-                              message:message
-                              success:successHandler
-                              failure:failureHandler];
+    [self.uploadingService uploadAttachmentStream:attachmentStream
+                                          message:message
+                                          success:successHandler
+                                          failure:failureHandler];
 }
 
 - (void)sendTemporaryAttachmentData:(NSData *)attachmentData

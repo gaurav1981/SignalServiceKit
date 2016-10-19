@@ -14,8 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface OWSUploadingService ()
 
-@property (nonatomic, readonly) NSData *data;
-@property (nonatomic, readonly) NSString *contentType;
 @property (nonatomic, readonly) TSNetworkManager *networkManager;
 
 @end
@@ -34,21 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
-- (void)uploadData:(NSData *)data
-       contentType:(NSString *)contentType
-           message:(TSOutgoingMessage *)outgoingMessage
-           success:(void (^)(TSOutgoingMessage *_Nonnull))successHandler
-           failure:(void (^)(NSError *_Nonnull))failureHandler
+- (void)uploadAttachmentStream:(TSAttachmentStream *)attachmentStream
+                       message:(TSOutgoingMessage *)outgoingMessage
+                       success:(void (^)(TSOutgoingMessage *_Nonnull))successHandler
+                       failure:(void (^)(NSError *_Nonnull))failureHandler
 {
-    TSAttachmentStream *attachmentStream =
-        [TSAttachmentStream fetchObjectWithUniqueID:outgoingMessage.attachmentIds.firstObject];
-    if (!attachmentStream) {
-        // TODO background queue, or move whole method call to queue.
-        attachmentStream = [[TSAttachmentStream alloc] initWithData:data contentType:self.contentType];
-        [attachmentStream save];
-
-        [outgoingMessage.attachmentIds addObject:attachmentStream.uniqueId];
-    }
     outgoingMessage.messageState = TSOutgoingMessageStateAttemptingOut;
     [outgoingMessage save];
 
@@ -74,7 +62,8 @@ NS_ASSUME_NONNULL_BEGIN
                 NSString *location = [responseDict objectForKey:@"location"];
 
                 NSData *encryptionKey;
-                NSData *encryptedAttachmentData = [Cryptography encryptAttachmentData:self.data outKey:&encryptionKey];
+                NSData *encryptedAttachmentData =
+                    [Cryptography encryptAttachmentData:attachmentStream.readDataFromFile outKey:&encryptionKey];
                 attachmentStream.encryptionKey = encryptionKey;
 
                 [self uploadDataWithProgress:encryptedAttachmentData

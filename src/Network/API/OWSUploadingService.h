@@ -5,17 +5,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class TSOutgoingMessage;
 @class TSNetworkManager;
+@class TSAttachmentStream;
 
 @interface OWSUploadingService : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager NS_DESIGNATED_INITIALIZER;
 
-- (void)uploadData:(NSData *)data
-       contentType:(NSString *)contentType
-           message:(TSOutgoingMessage *)outgoingMessage
-           success:(void (^)(TSOutgoingMessage *messageWithAttachment))successHandler
-           failure:(void (^)(NSError *error))failureHandler;
+- (void)uploadAttachmentStream:(TSAttachmentStream *)attachmentStream
+                       message:(TSOutgoingMessage *)outgoingMessage
+                       success:(void (^)(TSOutgoingMessage *messageWithAttachment))successHandler
+                       failure:(void (^)(NSError *error))failureHandler;
 
 @end
 

@@ -106,29 +106,31 @@
     if (!plaintext) {
         DDLogError(@"Failed to get attachment decrypted ...");
     } else {
-        TSAttachmentStream *stream =
-            [[TSAttachmentStream alloc] initWithData:plaintext contentType:attachment.contentType];
 
         [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-          [stream saveWithTransaction:transaction];
-          if ([attachment.avatarOfGroupId length] != 0) {
-              TSGroupModel *emptyModelToFillOutId =
-                  [[TSGroupModel alloc] initWithTitle:nil memberIds:nil image:nil groupId:attachment.avatarOfGroupId];
-              TSGroupThread *gThread =
-                  [TSGroupThread getOrCreateThreadWithGroupModel:emptyModelToFillOutId transaction:transaction];
+            TSMessage *message = [TSMessage fetchObjectWithUniqueID:messageId transaction:transaction];
+            TSAttachmentPointer *pointer =
+                [TSAttachmentPointer fetchObjectWithUniqueID:message.attachmentIds.firstObject];
+            TSAttachmentStream *stream = [[TSAttachmentStream alloc] initWithPointer:pointer decryptedData:plaintext];
 
-              gThread.groupModel.groupImage = [stream image];
-              // Avatars are stored directly in the database, so there's no need to keep the attachment around after
-              // assigning the image.
-              [stream removeWithTransaction:transaction];
+            if ([attachment.avatarOfGroupId length] != 0) {
+                TSGroupModel *emptyModelToFillOutId =
+                    [[TSGroupModel alloc] initWithTitle:nil memberIds:nil image:nil groupId:attachment.avatarOfGroupId];
+                TSGroupThread *gThread =
+                    [TSGroupThread getOrCreateThreadWithGroupModel:emptyModelToFillOutId transaction:transaction];
 
-              [[TSMessage fetchObjectWithUniqueID:messageId] saveWithTransaction:transaction];
-              [gThread saveWithTransaction:transaction];
-          } else {
-              // Causing message to be reloaded in view.
-              TSMessage *message = [TSMessage fetchObjectWithUniqueID:messageId transaction:transaction];
-              [message saveWithTransaction:transaction];
-          }
+                gThread.groupModel.groupImage = [stream image];
+                // Avatars are stored directly in the database, so there's no need to keep the attachment around after
+                // assigning the image.
+                [stream removeWithTransaction:transaction];
+
+                [message saveWithTransaction:transaction];
+                [gThread touchWithTransaction:transaction];
+            } else {
+                // Causing message to be reloaded in view.
+                [stream saveWithTransaction:transaction];
+                [message touchWithTransaction:transaction];
+            }
         }];
     }
 }
