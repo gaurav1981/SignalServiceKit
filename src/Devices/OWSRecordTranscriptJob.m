@@ -11,17 +11,19 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+
 @interface OWSRecordTranscriptJob ()
 
+@property (nonatomic, readonly) OWSIncomingSentMessageTranscript *incomingSentMessageTranscript;
 @property (nonatomic, readonly) TSMessagesManager *messagesManager;
-@property (nonatomic, readonly) OWSIncomingSentMessageTranscript *incomingSendtMessageTranscript;
+@property (nonatomic, readonly) TSNetworkManager *networkManager;
 
 @end
 
 @implementation OWSRecordTranscriptJob
 
 - (instancetype)initWithMessagesManager:(TSMessagesManager *)messagesManager
-          incomingSentMessageTranscript:(OWSIncomingSentMessageTranscript *)incomingSendtMessageTranscript
+          incomingSentMessageTranscript:(OWSIncomingSentMessageTranscript *)incomingSentMessageTranscript
 {
     self = [super init];
     if (!self) {
@@ -29,23 +31,23 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     _messagesManager = messagesManager;
-    _incomingSendtMessageTranscript = incomingSendtMessageTranscript;
+    _networkManager = messagesManager.networkManager;
+    _incomingSentMessageTranscript = incomingSentMessageTranscript;
 
     return self;
 }
 
-- (void)run
+- (void)runWithAttachmentHandler:(void (^)(TSAttachmentStream *attachmentStream))attachmentHandler
 {
-    OWSIncomingSentMessageTranscript *transcript = self.incomingSendtMessageTranscript;
+    OWSIncomingSentMessageTranscript *transcript = self.incomingSentMessageTranscript;
     DDLogDebug(@"%@ Recording transcript: %@", self.tag, transcript);
     TSThread *thread = transcript.thread;
     OWSAttachmentsProcessor *attachmentsProcessor =
-        [[OWSAttachmentsProcessor alloc] initWithAttachmentPointersProtos:transcript.attachmentPointerProtos
-                                                                timestamp:transcript.timestamp
-                                                                    relay:transcript.relay
-                                                            avatarGroupId:transcript.groupId
-                                                                 inThread:thread
-                                                          messagesManager:self.messagesManager];
+    [[OWSAttachmentsProcessor alloc] initWithAttachmentProtos:transcript.attachmentPointerProtos
+                                                    timestamp:transcript.timestamp
+                                                        relay:transcript.relay
+                                                       thread:thread
+                                               networkManager:self.networkManager];
 
     // TODO group updates. Currently desktop doesn't support group updates, so not a problem yet.
     TSOutgoingMessage *outgoingMessage =
@@ -64,7 +66,14 @@ NS_ASSUME_NONNULL_BEGIN
 
     [self.messagesManager handleMessageSentRemotely:outgoingMessage sentAt:transcript.expirationStartedAt];
 
-    [attachmentsProcessor fetchAttachmentsForMessageId:outgoingMessage.uniqueId];
+    [attachmentsProcessor
+        fetchAttachmentsForMessage:nil
+                           success:attachmentHandler
+                           failure:^(NSError *_Nonnull error) {
+                               DDLogError(@"%@ failed to fetch transcripts attachments for message: %@",
+                                   self.tag,
+                                   outgoingMessage);
+                           }];
 
     // If there is an attachment + text, render the text here, as Signal-iOS renders two messages.
     if (attachmentsProcessor.hasSupportedAttachments && transcript.body && ![transcript.body isEqualToString:@""]) {

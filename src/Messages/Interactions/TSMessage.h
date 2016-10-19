@@ -9,6 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
  *  Abstract message class.
  */
 
+@class TSAttachmentPointer;
+
 typedef NS_ENUM(NSInteger, TSGroupMetaMessage) {
     TSGroupMessageNone,
     TSGroupMessageNew,
@@ -55,6 +57,8 @@ typedef NS_ENUM(NSInteger, TSGroupMetaMessage) {
                   expireStartedAt:(uint64_t)expireStartedAt NS_DESIGNATED_INITIALIZER;
 
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_DESIGNATED_INITIALIZER;
+
+- (void)enumerateAttachmentPointersWithBlock:(void (^)(TSAttachmentPointer *attachment))block;
 
 - (BOOL)hasAttachments;
 

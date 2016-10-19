@@ -7,6 +7,7 @@
 #import "MimeTypeUtil.h"
 #import "NSData+messagePadding.h"
 #import "NSDate+millisecondTimeStamp.h"
+#import "OWSAttachmentsProcessor.h"
 #import "OWSDisappearingConfigurationUpdateInfoMessage.h"
 #import "OWSDisappearingMessagesConfiguration.h"
 #import "OWSDisappearingMessagesJob.h"
@@ -25,7 +26,6 @@
 #import "TSGroupThread.h"
 #import "TSInfoMessage.h"
 #import "TSInvalidIdentityKeyReceivingErrorMessage.h"
-#import "TSMessagesManager+attachments.h"
 #import "TSNetworkManager.h"
 #import "TSStorageHeaders.h"
 #import "TextSecureKitEnv.h"
@@ -269,16 +269,80 @@ NS_ASSUME_NONNULL_BEGIN
     } else if ((dataMessage.flags & OWSSignalServiceProtosDataMessageFlagsExpirationTimerUpdate) != 0) {
         DDLogVerbose(@"%@ Received expiration timer update message", self.tag);
         [self handleExpirationTimerUpdateMessageWithEnvelope:incomingEnvelope dataMessage:dataMessage];
-    } else if (dataMessage.attachments.count > 0
-        || (dataMessage.hasGroup && dataMessage.group.type == OWSSignalServiceProtosGroupContextTypeUpdate
-               && dataMessage.group.hasAvatar)) {
-
-        DDLogVerbose(@"%@ Received push media message (attachment) or group with an avatar", self.tag);
+    } else if (dataMessage.attachments.count > 0) {
+        DDLogVerbose(@"%@ Received media message attachment", self.tag);
         [self handleReceivedMediaWithEnvelope:incomingEnvelope dataMessage:dataMessage];
+    } else if ([self isDataMessageGroupAvatarUpdate:dataMessage]) {
+        DDLogVerbose(@"%@ Received group avatar attachment", self.tag);
+        [self handleReceivedGroupAvatarUpdateWithEnvelope:incomingEnvelope dataMessage:dataMessage];
     } else {
         DDLogVerbose(@"%@ Received data message.", self.tag);
         [self handleReceivedTextMessageWithEnvelope:incomingEnvelope dataMessage:dataMessage];
     }
+}
+
+- (BOOL)isDataMessageGroupAvatarUpdate:(OWSSignalServiceProtosDataMessage *)dataMessage
+{
+    return dataMessage.hasGroup
+        && dataMessage.group.type == OWSSignalServiceProtosGroupContextTypeUpdate
+        && dataMessage.group.hasAvatar;
+}
+
+- (void)handleReceivedGroupAvatarUpdateWithEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
+                                        dataMessage:(OWSSignalServiceProtosDataMessage *)dataMessage
+{
+    TSGroupThread *groupThread = [TSGroupThread getOrCreateThreadWithGroupIdData:dataMessage.group.id];
+    OWSAttachmentsProcessor *attachmentsProcessor =
+        [[OWSAttachmentsProcessor alloc] initWithAttachmentProtos:@[ dataMessage.group.avatar ]
+                                                        timestamp:envelope.timestamp
+                                                            relay:envelope.relay
+                                                           thread:groupThread
+                                                   networkManager:self.networkManager];
+
+    if (!attachmentsProcessor.hasSupportedAttachments) {
+        DDLogWarn(@"%@ received unsupported group avatar envelope", self.tag);
+        return;
+    }
+    [attachmentsProcessor fetchAttachmentsForMessage:nil
+        success:^(TSAttachmentStream *_Nonnull attachmentStream) {
+            [groupThread updateAvatarWithAttachmentStream:attachmentStream];
+        }
+        failure:^(NSError *_Nonnull error) {
+            DDLogError(@"%@ failed to fetch attachments for group avatar sent at: %llu. with error: %@",
+                self.tag,
+                envelope.timestamp,
+                error);
+        }];
+}
+
+- (void)handleReceivedMediaWithEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
+                            dataMessage:(OWSSignalServiceProtosDataMessage *)dataMessage
+{
+    TSThread *thread = [self threadForEnvelope:envelope dataMessage:dataMessage];
+    OWSAttachmentsProcessor *attachmentsProcessor =
+        [[OWSAttachmentsProcessor alloc] initWithAttachmentProtos:dataMessage.attachments
+                                                        timestamp:envelope.timestamp
+                                                            relay:envelope.relay
+                                                           thread:thread
+                                                   networkManager:self.networkManager];
+    if (!attachmentsProcessor.hasSupportedAttachments) {
+        DDLogWarn(@"%@ received unsupported media envelope", self.tag);
+        return;
+    }
+
+    TSIncomingMessage *createdMessage = [self handleReceivedEnvelope:envelope
+                                                     withDataMessage:dataMessage
+                                                       attachmentIds:attachmentsProcessor.supportedAttachmentIds];
+
+    [attachmentsProcessor fetchAttachmentsForMessage:createdMessage
+        success:^(TSAttachmentStream *_Nonnull attachmentStream) {
+            DDLogDebug(
+                @"%@ successfully fetched attachment: %@ for message: %@", self.tag, attachmentStream, createdMessage);
+        }
+        failure:^(NSError *_Nonnull error) {
+            DDLogError(
+                @"%@ failed to fetch attachments for message: %@ with error: %@", self.tag, createdMessage, error);
+        }];
 }
 
 - (void)handleIncomingEnvelope:(OWSSignalServiceProtosEnvelope *)messageEnvelope
@@ -288,7 +352,21 @@ NS_ASSUME_NONNULL_BEGIN
         DDLogInfo(@"%@ Received `sent` syncMessage, recording message transcript.", self.tag);
         OWSIncomingSentMessageTranscript *transcript =
             [[OWSIncomingSentMessageTranscript alloc] initWithProto:syncMessage.sent relay:messageEnvelope.relay];
-        [[[OWSRecordTranscriptJob alloc] initWithMessagesManager:self incomingSentMessageTranscript:transcript] run];
+
+        OWSRecordTranscriptJob *recordJob =
+            [[OWSRecordTranscriptJob alloc] initWithMessagesManager:self incomingSentMessageTranscript:transcript];
+
+        if ([self isDataMessageGroupAvatarUpdate:syncMessage.sent.message]) {
+            [recordJob runWithAttachmentHandler:^(TSAttachmentStream *_Nonnull attachmentStream) {
+                TSGroupThread *groupThread =
+                    [TSGroupThread getOrCreateThreadWithGroupIdData:syncMessage.sent.message.group.id];
+                [groupThread updateAvatarWithAttachmentStream:attachmentStream];
+            }];
+        } else {
+            [recordJob runWithAttachmentHandler:^(TSAttachmentStream *_Nonnull attachmentStream) {
+                DDLogDebug(@"%@ successfully fetched transcript attachment: %@", self.tag, attachmentStream);
+            }];
+        }
     } else if (syncMessage.hasRequest) {
         if (syncMessage.request.type == OWSSignalServiceProtosSyncMessageRequestTypeContacts) {
             DDLogInfo(@"%@ Received request `Contacts` syncMessage.", self.tag);

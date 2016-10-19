@@ -10,8 +10,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-NSString *const TAG = @"[TSOutgoingMessage]";
-
 @implementation TSOutgoingMessage
 
 - (instancetype)initWithCoder:(NSCoder *)coder
@@ -94,7 +92,7 @@ NSString *const TAG = @"[TSOutgoingMessage]";
 - (void)saveWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
 {
     if (self.groupMetaMessage == TSGroupMessageNew || self.groupMetaMessage == TSGroupMessageUpdate) {
-        DDLogDebug(@"%@ Skipping save for group meta message.", TAG);
+        DDLogDebug(@"%@ Skipping save for group meta message.", self.tag);
         return;
     }
 
@@ -192,6 +190,18 @@ NSString *const TAG = @"[TSOutgoingMessage]";
     [builder setKey:attachmentStream.encryptionKey];
 
     return [builder build];
+}
+
+#pragma mark - Logging
+
++ (NSString *)tag
+{
+    return [NSString stringWithFormat:@"[%@]", self.class];
+}
+
+- (NSString *)tag
+{
+    return self.class.tag;
 }
 
 @end

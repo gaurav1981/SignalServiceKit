@@ -5,6 +5,7 @@
 #import "NSDate+millisecondTimeStamp.h"
 #import "OWSDisappearingMessagesJob.h"
 #import "TSAttachment.h"
+#import "TSAttachmentPointer.h"
 #import "TSThread.h"
 #import <YapDatabase/YapDatabaseTransaction.h>
 
@@ -133,7 +134,16 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
     return self;
 }
 
-// Seconds.
+- (void)enumerateAttachmentPointersWithBlock:(void (^)(TSAttachmentPointer *attachment))block
+{
+    for (NSString *attachmentId in self.attachmentIds) {
+        TSAttachment *attachment = [TSAttachment fetchObjectWithUniqueID:attachmentId];
+        if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
+            block((TSAttachmentPointer *)attachment);
+        }
+    }
+}
+
 - (void)setexpiresInSeconds:(uint32_t)expiresInSeconds
 {
     _expiresInSeconds = expiresInSeconds;
