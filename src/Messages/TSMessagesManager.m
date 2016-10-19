@@ -411,19 +411,6 @@ NS_ASSUME_NONNULL_BEGIN
           [gThread saveWithTransaction:transaction];
 
           if (dataMessage.group.type == OWSSignalServiceProtosGroupContextTypeUpdate) {
-              if ([attachmentIds count] == 1) {
-                  NSString *avatarId = attachmentIds[0];
-                  TSAttachment *avatar = [TSAttachment fetchObjectWithUniqueID:avatarId];
-                  if ([avatar isKindOfClass:[TSAttachmentStream class]]) {
-                      TSAttachmentStream *stream = (TSAttachmentStream *)avatar;
-                      if ([stream isImage]) {
-                          model.groupImage = [stream image];
-                          // No need to keep the attachment around after assigning the image.
-                          [stream removeWithTransaction:transaction];
-                      }
-                  }
-              }
-
               NSString *updateGroupInfo = [gThread.groupModel getInfoStringAboutUpdateTo:model contactsManager:self.contactsManager];
               gThread.groupModel        = model;
               [gThread saveWithTransaction:transaction];
