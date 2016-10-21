@@ -17,6 +17,16 @@ NS_ASSUME_NONNULL_BEGIN
     return queue;
 }
 
++ (dispatch_queue_t)sendingQueue
+{
+    static dispatch_once_t onceToken;
+    static dispatch_queue_t queue;
+    dispatch_once(&onceToken, ^{
+        queue = dispatch_queue_create("org.whispersystems.signal.sendQueue", NULL);
+    });
+    return queue;
+}
+
 @end
 
 NS_ASSUME_NONNULL_END

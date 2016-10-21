@@ -14,8 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
     NSLog(@"[OWSFakeNetworkManager] Ignoring unhandled request: %@", request);
 }
 
-
 @end
-
 
 NS_ASSUME_NONNULL_END

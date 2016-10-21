@@ -34,7 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)uploadAttachmentStream:(TSAttachmentStream *)attachmentStream
                        message:(TSOutgoingMessage *)outgoingMessage
-                       success:(void (^)(TSOutgoingMessage *_Nonnull))successHandler
+                       success:(void (^)())successHandler
                        failure:(void (^)(NSError *_Nonnull))failureHandler
 {
     outgoingMessage.messageState = TSOutgoingMessageStateAttemptingOut;
@@ -75,7 +75,7 @@ NS_ASSUME_NONNULL_BEGIN
                                          attachmentStream.isDownloaded = YES;
                                          [attachmentStream save];
 
-                                         successHandler(outgoingMessage);
+                                         successHandler();
                                      }
                                      failure:failureHandler];
 

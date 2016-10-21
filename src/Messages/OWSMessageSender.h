@@ -3,18 +3,22 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class TSOutgoingMessage;
-@class TSNetworkManager;
-@class TSStorageManager;
 @class ContactsUpdater;
-@class TSMessagesManager;
+@class OWSUploadingService;
+@class SignalRecipient;
+@class TSInvalidIdentityKeySendingErrorMessage;
+@class TSNetworkManager;
+@class TSOutgoingMessage;
+@class TSStorageManager;
+@class TSThread;
 @protocol ContactsManagerProtocol;
 
 @interface OWSMessageSender : NSObject {
 
 @protected
+
     // For subclassing in tests
-    TSMessagesManager *_messagesManager;
+    OWSUploadingService *_uploadingService;
 }
 
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
@@ -48,6 +52,17 @@ NS_ASSUME_NONNULL_BEGIN
                           inMessage:(TSOutgoingMessage *)outgoingMessage
                             success:(void (^)())successHandler
                             failure:(void (^)(NSError *error))failureHandler;
+
+/**
+ * Resend a message to a select recipient in a thread.
+ * e.g. If a key change prevents one recipient from receiving the message, we don't want to resend to the entire group.
+ */
+- (void)resendMessageFromKeyError:(TSInvalidIdentityKeySendingErrorMessage *)errorMessage
+                          success:(void (^)())successHandler
+                          failure:(void (^)(NSError *error))failureHandler;
+
+- (void)handleMessageSentRemotely:(TSOutgoingMessage *)message sentAt:(uint64_t)sentAt;
+- (void)becomeConsistentWithDisappearingConfigurationForMessage:(TSOutgoingMessage *)outgoingMessage;
 
 @end
 

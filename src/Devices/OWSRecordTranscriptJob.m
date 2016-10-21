@@ -5,33 +5,33 @@
 #import "OWSAttachmentsProcessor.h"
 #import "OWSDisappearingMessagesJob.h"
 #import "OWSIncomingSentMessageTranscript.h"
-#import "TSMessagesManager+sendMessages.h"
+#import "OWSMessageSender.h"
 #import "TSOutgoingMessage.h"
 #import "TSStorageManager.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-
 @interface OWSRecordTranscriptJob ()
 
 @property (nonatomic, readonly) OWSIncomingSentMessageTranscript *incomingSentMessageTranscript;
-@property (nonatomic, readonly) TSMessagesManager *messagesManager;
+@property (nonatomic, readonly) OWSMessageSender *messageSender;
 @property (nonatomic, readonly) TSNetworkManager *networkManager;
 
 @end
 
 @implementation OWSRecordTranscriptJob
 
-- (instancetype)initWithMessagesManager:(TSMessagesManager *)messagesManager
-          incomingSentMessageTranscript:(OWSIncomingSentMessageTranscript *)incomingSentMessageTranscript
+- (instancetype)initWithIncomingSentMessageTranscript:(OWSIncomingSentMessageTranscript *)incomingSentMessageTranscript
+                                        messageSender:(OWSMessageSender *)messageSender
+                                       networkManager:(TSNetworkManager *)networkManager
 {
     self = [super init];
     if (!self) {
         return self;
     }
 
-    _messagesManager = messagesManager;
-    _networkManager = messagesManager.networkManager;
+    _messageSender = messageSender;
+    _networkManager = networkManager;
     _incomingSentMessageTranscript = incomingSentMessageTranscript;
 
     return self;
@@ -59,12 +59,12 @@ NS_ASSUME_NONNULL_BEGIN
                                      expireStartedAt:transcript.expirationStartedAt];
 
     if (transcript.isExpirationTimerUpdate) {
-        [self.messagesManager becomeConsistentWithDisappearingConfigurationForMessage:outgoingMessage];
+        [self.messageSender becomeConsistentWithDisappearingConfigurationForMessage:outgoingMessage];
         // early return to avoid saving an empty incoming message.
         return;
     }
 
-    [self.messagesManager handleMessageSentRemotely:outgoingMessage sentAt:transcript.expirationStartedAt];
+    [self.messageSender handleMessageSentRemotely:outgoingMessage sentAt:transcript.expirationStartedAt];
 
     [attachmentsProcessor
         fetchAttachmentsForMessage:nil

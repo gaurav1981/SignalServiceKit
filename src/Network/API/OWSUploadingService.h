@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)uploadAttachmentStream:(TSAttachmentStream *)attachmentStream
                        message:(TSOutgoingMessage *)outgoingMessage
-                       success:(void (^)(TSOutgoingMessage *messageWithAttachment))successHandler
+                       success:(void (^)())successHandler
                        failure:(void (^)(NSError *error))failureHandler;
 
 @end

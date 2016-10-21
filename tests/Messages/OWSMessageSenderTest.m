@@ -6,6 +6,7 @@
 #import "OWSFakeContactsUpdater.h"
 #import "OWSFakeNetworkManager.h"
 #import "OWSMessageSender.h"
+#import "OWSUploadingService.h"
 #import "TSContactThread.h"
 #import "TSMessagesManager.h"
 #import "TSNetworkManager.h"
@@ -16,11 +17,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface OWSFakeMessagesManager : TSMessagesManager
+@interface OWSMessageSender (Testing)
+
+@property (nonatomic) OWSUploadingService *uploadingService;
 
 @end
 
-@implementation OWSFakeMessagesManager
+@implementation OWSMessageSender (Testing)
 
 - (NSArray<NSDictionary *> *)deviceMessages:(TSOutgoingMessage *)message
                                forRecipient:(SignalRecipient *)recipient
@@ -30,19 +33,48 @@ NS_ASSUME_NONNULL_BEGIN
     return @[];
 }
 
-@end
-
-@interface OWSMessageSender (Testing)
-
-- (void)setMessagesManager:(TSMessagesManager *)messagesManager;
-
-@end
-
-@implementation OWSMessageSender (Testing)
-
-- (void)setMessagesManager:(TSMessagesManager *)messagesManager
+- (void)setUploadingService:(OWSUploadingService *)uploadingService
 {
-    _messagesManager = messagesManager;
+    _uploadingService = uploadingService;
+}
+
+- (OWSUploadingService *)uploadingService
+{
+    return _uploadingService;
+}
+
+@end
+
+@interface OWSFakeUploadingService : OWSUploadingService
+
+@property (nonatomic, readonly) BOOL shouldSucceed;
+
+@end
+
+@implementation OWSFakeUploadingService
+
+- (instancetype)initWithSuccess:(BOOL)flag
+{
+    self = [super initWithNetworkManager:[OWSFakeNetworkManager new]];
+    if (!self) {
+        return self;
+    }
+
+    _shouldSucceed = flag;
+
+    return self;
+}
+
+- (void)uploadAttachmentStream:(TSAttachmentStream *)attachmentStream
+                       message:(TSOutgoingMessage *)outgoingMessage
+                       success:(void (^)())successHandler
+                       failure:(void (^)(NSError *error))failureHandler
+{
+    if (self.shouldSucceed) {
+        successHandler();
+    } else {
+        failureHandler(OWSErrorMakeFailedToSendOutgoingMessageError());
+    }
 }
 
 @end
@@ -123,6 +155,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) TSThread *thread;
 @property (nonatomic) TSOutgoingMessage *expiringMessage;
 @property (nonatomic) OWSMessageSenderFakeNetworkManager *networkManager;
+@property (nonatomic) OWSMessageSender *successfulMessageSender;
+@property (nonatomic) OWSMessageSender *unsuccessfulMessageSender;
 
 @end
 
@@ -144,29 +178,30 @@ NS_ASSUME_NONNULL_BEGIN
                                                           attachmentIds:[NSMutableArray new]
                                                        expiresInSeconds:30];
     [self.expiringMessage save];
-}
-
-- (void)testExpiringMessageTimerStartsOnSuccess
-{
-    // Successful network manager
-    TSNetworkManager *networkManager = [[OWSMessageSenderFakeNetworkManager alloc] initWithSuccess:YES];
 
 
     TSStorageManager *storageManager = [TSStorageManager sharedManager];
     OWSFakeContactsManager *contactsManager = [OWSFakeContactsManager new];
     OWSFakeContactsUpdater *contactsUpdater = [OWSFakeContactsUpdater new];
 
-    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
-                                                                        storageManager:storageManager
-                                                                       contactsManager:contactsManager
-                                                                       contactsUpdater:contactsUpdater];
+    // Successful Sending
+    TSNetworkManager *successfulNetworkManager = [[OWSMessageSenderFakeNetworkManager alloc] initWithSuccess:YES];
+    self.successfulMessageSender = [[OWSMessageSender alloc] initWithNetworkManager:successfulNetworkManager
+                                                                     storageManager:storageManager
+                                                                    contactsManager:contactsManager
+                                                                    contactsUpdater:contactsUpdater];
 
-    TSMessagesManager *fakeMessagesManager = [[OWSFakeMessagesManager alloc] initWithNetworkManager:networkManager
-                                                                                     storageManager:storageManager
-                                                                                    contactsManager:contactsManager
-                                                                                    contactsUpdater:contactsUpdater
-                                                                                      messageSender:messageSender];
-    messageSender.messagesManager = fakeMessagesManager;
+    // Unsuccessful Sending
+    TSNetworkManager *unsuccessfulNetworkManager = [[OWSMessageSenderFakeNetworkManager alloc] initWithSuccess:NO];
+    self.unsuccessfulMessageSender = [[OWSMessageSender alloc] initWithNetworkManager:unsuccessfulNetworkManager
+                                                                       storageManager:storageManager
+                                                                      contactsManager:contactsManager
+                                                                      contactsUpdater:contactsUpdater];
+}
+
+- (void)testExpiringMessageTimerStartsOnSuccess
+{
+    OWSMessageSender *messageSender = self.successfulMessageSender;
 
     // Sanity Check
     XCTAssertEqual(0, self.expiringMessage.expiresAt);
@@ -192,25 +227,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testExpiringMessageTimerDoesNotStartsOnFailure
 {
-    // Unsuccessful network manager
-    TSNetworkManager *networkManager = [[OWSMessageSenderFakeNetworkManager alloc] initWithSuccess:NO];
-
-
-    TSStorageManager *storageManager = [TSStorageManager sharedManager];
-    OWSFakeContactsManager *contactsManager = [OWSFakeContactsManager new];
-    OWSFakeContactsUpdater *contactsUpdater = [OWSFakeContactsUpdater new];
-
-    OWSMessageSender *messageSender = [[OWSMessageSender alloc] initWithNetworkManager:networkManager
-                                                                        storageManager:storageManager
-                                                                       contactsManager:contactsManager
-                                                                       contactsUpdater:contactsUpdater];
-
-    TSMessagesManager *fakeMessagesManager = [[OWSFakeMessagesManager alloc] initWithNetworkManager:networkManager
-                                                                                     storageManager:storageManager
-                                                                                    contactsManager:contactsManager
-                                                                                    contactsUpdater:contactsUpdater
-                                                                                      messageSender:messageSender];
-    messageSender.messagesManager = fakeMessagesManager;
+    OWSMessageSender *messageSender = self.unsuccessfulMessageSender;
 
     // Sanity Check
     XCTAssertEqual(0, self.expiringMessage.expiresAt);
@@ -228,11 +245,141 @@ NS_ASSUME_NONNULL_BEGIN
             }
         }];
 
-    [self waitForExpectationsWithTimeout:5
-                                 handler:^(NSError *error) {
-                                     NSLog(@"Wasn't able to verify.");
-                                 }];
+    [self waitForExpectationsWithTimeout:5 handler:nil];
 }
+
+- (void)testTextMessageIsMarkedAsSentOnSuccess
+{
+    OWSMessageSender *messageSender = self.successfulMessageSender;
+
+    TSOutgoingMessage *message = [[TSOutgoingMessage alloc] initWithTimestamp:1
+                                                                     inThread:self.thread
+                                                                  messageBody:@"We want punks in the palace."];
+
+    XCTestExpectation *markedAsSent = [self expectationWithDescription:@"markedAsSent"];
+    [messageSender sendMessage:message
+        success:^() {
+            if (message.messageState == TSOutgoingMessageStateSent) {
+                [markedAsSent fulfill];
+            } else {
+                XCTFail(@"Unexpected message state");
+            }
+        }
+        failure:^(NSError *error) {
+            XCTFail(@"sendMessage should succeed.");
+        }];
+
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+}
+
+- (void)testMediaMessageIsMarkedAsSentOnSuccess
+{
+    OWSMessageSender *messageSender = self.successfulMessageSender;
+    messageSender.uploadingService = [[OWSFakeUploadingService alloc] initWithSuccess:YES];
+
+    TSOutgoingMessage *message = [[TSOutgoingMessage alloc] initWithTimestamp:1
+                                                                     inThread:self.thread
+                                                                  messageBody:@"We want punks in the palace."];
+
+    XCTestExpectation *markedAsSent = [self expectationWithDescription:@"markedAsSent"];
+    [messageSender sendAttachmentData:[NSData new]
+        contentType:@"image/gif"
+        inMessage:message
+        success:^() {
+            if (message.messageState == TSOutgoingMessageStateSent) {
+                [markedAsSent fulfill];
+            } else {
+                XCTFail(@"Unexpected message state");
+            }
+        }
+        failure:^(NSError *error) {
+            XCTFail(@"sendMessage should succeed.");
+        }];
+
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+}
+
+- (void)testTextMessageIsMarkedAsUnsentOnFailure
+{
+    OWSMessageSender *messageSender = self.unsuccessfulMessageSender;
+    messageSender.uploadingService = [[OWSFakeUploadingService alloc] initWithSuccess:YES];
+
+    TSOutgoingMessage *message = [[TSOutgoingMessage alloc] initWithTimestamp:1
+                                                                     inThread:self.thread
+                                                                  messageBody:@"We want punks in the palace."];
+
+    XCTestExpectation *markedAsUnsent = [self expectationWithDescription:@"markedAsUnsent"];
+    [messageSender sendMessage:message
+        success:^() {
+            XCTFail(@"sendMessage should fail.");
+        }
+        failure:^(NSError *error) {
+            if (message.messageState == TSOutgoingMessageStateUnsent) {
+                [markedAsUnsent fulfill];
+            } else {
+                XCTFail(@"Unexpected message state");
+            }
+        }];
+
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+}
+
+- (void)testMediaMessageIsMarkedAsUnsentOnFailureToSend
+{
+    OWSMessageSender *messageSender = self.unsuccessfulMessageSender;
+    // Assume that upload will go well, but that failure happens elsewhere in message sender.
+    messageSender.uploadingService = [[OWSFakeUploadingService alloc] initWithSuccess:YES];
+
+    TSOutgoingMessage *message = [[TSOutgoingMessage alloc] initWithTimestamp:1
+                                                                     inThread:self.thread
+                                                                  messageBody:@"We want punks in the palace."];
+
+    XCTestExpectation *markedAsUnsent = [self expectationWithDescription:@"markedAsUnsent"];
+    [messageSender sendAttachmentData:[NSData new]
+        contentType:@"image/gif"
+        inMessage:message
+        success:^{
+            XCTFail(@"sendMessage should fail.");
+        }
+        failure:^(NSError *_Nonnull error) {
+            if (message.messageState == TSOutgoingMessageStateUnsent) {
+                [markedAsUnsent fulfill];
+            } else {
+                XCTFail(@"Unexpected message state");
+            }
+        }];
+
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+}
+
+- (void)testMediaMessageIsMarkedAsUnsentOnFailureToUpload
+{
+    OWSMessageSender *messageSender = self.successfulMessageSender;
+    // Assume that upload fails, but other sending stuff would succeed.
+    messageSender.uploadingService = [[OWSFakeUploadingService alloc] initWithSuccess:NO];
+
+    TSOutgoingMessage *message = [[TSOutgoingMessage alloc] initWithTimestamp:1
+                                                                     inThread:self.thread
+                                                                  messageBody:@"We want punks in the palace."];
+
+    XCTestExpectation *markedAsUnsent = [self expectationWithDescription:@"markedAsUnsent"];
+    [messageSender sendAttachmentData:[NSData new]
+        contentType:@"image/gif"
+        inMessage:message
+        success:^{
+            XCTFail(@"sendMessage should fail.");
+        }
+        failure:^(NSError *_Nonnull error) {
+            if (message.messageState == TSOutgoingMessageStateUnsent) {
+                [markedAsUnsent fulfill];
+            } else {
+                XCTFail(@"Unexpected message state");
+            }
+        }];
+
+    [self waitForExpectationsWithTimeout:5 handler:nil];
+}
+
 
 @end
 

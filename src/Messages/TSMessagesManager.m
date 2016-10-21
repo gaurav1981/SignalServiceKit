@@ -39,6 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) id<ContactsManagerProtocol> contactsManager;
 @property (nonatomic, readonly) TSStorageManager *storageManager;
 @property (nonatomic, readonly) OWSMessageSender *messageSender;
+@property (nonatomic, readonly) OWSDisappearingMessagesJob *disappearingMessagesJob;
 
 @end
 
@@ -354,7 +355,9 @@ NS_ASSUME_NONNULL_BEGIN
             [[OWSIncomingSentMessageTranscript alloc] initWithProto:syncMessage.sent relay:messageEnvelope.relay];
 
         OWSRecordTranscriptJob *recordJob =
-            [[OWSRecordTranscriptJob alloc] initWithMessagesManager:self incomingSentMessageTranscript:transcript];
+            [[OWSRecordTranscriptJob alloc] initWithIncomingSentMessageTranscript:transcript
+                                                                    messageSender:self.messageSender
+                                                                   networkManager:self.networkManager];
 
         if ([self isDataMessageGroupAvatarUpdate:syncMessage.sent.message]) {
             [recordJob runWithAttachmentHandler:^(TSAttachmentStream *_Nonnull attachmentStream) {
@@ -570,7 +573,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                        storageManager:self.storageManager];
         [readReceiptsProcessor process];
 
-        [self becomeConsistentWithDisappearingConfigurationForMessage:incomingMessage];
+        [self.disappearingMessagesJob becomeConsistentWithConfigurationForMessage:incomingMessage
+                                                                  contactsManager:self.contactsManager];
 
         // Update thread preview in inbox
         [thread touch];
@@ -586,7 +590,7 @@ NS_ASSUME_NONNULL_BEGIN
     return incomingMessage;
 }
 
-- (void)becomeConsistentWithDisappearingConfigurationForMessage:(TSMessage *)message
+- (void)becomeConsistentWithConfigurationForMessage:(TSMessage *)message
 {
     // Become eventually consistent in the case that the remote changed their settings at the same time.
     // Also in case remote doesn't support expiring messages
@@ -658,36 +662,6 @@ NS_ASSUME_NONNULL_BEGIN
       }
 
       [errorMessage saveWithTransaction:transaction];
-    }];
-}
-
-- (void)processException:(NSException *)exception
-         outgoingMessage:(TSOutgoingMessage *)message
-                inThread:(TSThread *)thread
-{
-    DDLogWarn(@"%@ Got exception: %@", self.tag, exception);
-
-    [self.dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
-        TSErrorMessage *errorMessage;
-
-        if ([exception.name isEqualToString:UntrustedIdentityKeyException]) {
-            errorMessage = [TSInvalidIdentityKeySendingErrorMessage
-                untrustedKeyWithOutgoingMessage:message
-                                       inThread:thread
-                                   forRecipient:exception.userInfo[TSInvalidRecipientKey]
-                                   preKeyBundle:exception.userInfo[TSInvalidPreKeyBundleKey]
-                                withTransaction:transaction];
-            message.messageState = TSOutgoingMessageStateUnsent;
-            [message saveWithTransaction:transaction];
-        } else if (message.groupMetaMessage == TSGroupMessageNone) {
-            // Only update this with exception if it is not a group message as group
-            // messages may except for one group
-            // send but not another and the UI doesn't know how to handle that
-            [message setMessageState:TSOutgoingMessageStateUnsent];
-            [message saveWithTransaction:transaction];
-        }
-
-        [errorMessage saveWithTransaction:transaction];
     }];
 }
 

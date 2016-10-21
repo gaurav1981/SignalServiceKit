@@ -161,8 +161,7 @@
     uint64_t timestamp = 666;
     NSString *body = @"A child born today will grow up with no conception of privacy at all. They’ll never know what it means to have a private moment to themselves an unrecorded, unanalyzed thought. And that’s a problem because privacy matters; privacy is what allows us to determine who we are and who we want to be.";
 
-
-    TSAttachmentStream *pointer =
+    TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithData:[Cryptography generateRandomBytes:16] contentType:@"data/random"];
 
     __block TSGroupThread *thread;
@@ -174,7 +173,7 @@
                                                     transaction:transaction];
 
         [thread saveWithTransaction:transaction];
-        [pointer saveWithTransaction:transaction];
+        [attachmentStream saveWithTransaction:transaction];
 
     }];
 
@@ -186,19 +185,16 @@
                                                                             inThread:thread
                                                                             authorId:@"Ed"
                                                                          messageBody:body];
-
         [newMessage save];
     }
-    
-    
-    
+
     [[TSStorageManager sharedManager].dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         for (uint64_t i = timestamp; i<100; i++) {
             TSIncomingMessage *fetchedMessage = [TSIncomingMessage fetchObjectWithUniqueID:[TSInteraction stringFromTimeStamp:timestamp] transaction:transaction];
-            TSAttachmentStream *fetchedPointer = [TSAttachmentStream fetchObjectWithUniqueID:pointer.uniqueId];
-            NSAssert([fetchedPointer.image isEqual:pointer.image], @"attachment pointers not equal");
-            
-            
+            TSAttachmentStream *fetchedAttachmentStream =
+                [TSAttachmentStream fetchObjectWithUniqueID:attachmentStream.uniqueId];
+            NSAssert([fetchedAttachmentStream.image isEqual:attachmentStream.image], @"attachment pointers not equal");
+
             NSAssert([fetchedMessage.body isEqualToString:body], @"Body of incoming message recovered");
             NSAssert(fetchedMessage.attachmentIds == nil, @"attachments are nil");
             NSAssert([fetchedMessage.uniqueId isEqualToString:[TSInteraction stringFromTimeStamp:timestamp]], @"Unique identifier is accurate");
@@ -213,8 +209,8 @@
     [[TSStorageManager sharedManager].dbConnection readWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         for (uint64_t i = timestamp; i<100; i++) {
             TSIncomingMessage *fetchedMessage = [TSIncomingMessage fetchObjectWithUniqueID:[TSInteraction stringFromTimeStamp:timestamp] transaction:transaction];
-            TSAttachmentStream *fetchedPointer = [TSAttachmentStream fetchObjectWithUniqueID:pointer.uniqueId];
-            NSAssert(fetchedPointer == nil, @"Attachment pointer should be deleted");
+            TSAttachmentStream *fetchedStream = [TSAttachmentStream fetchObjectWithUniqueID:attachmentStream.uniqueId];
+            NSAssert(fetchedStream == nil, @"Attachment pointer should be deleted");
             NSAssert(fetchedMessage == nil, @"Message should be deleted!");
         }
     }];

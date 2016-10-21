@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithPointer:(TSAttachmentPointer *)pointer decryptedData:(NSData *)data
 {
-    // Once downloaded, AttachmentStream will replace the AttachmentPointer in the attachments collection.
+    // Once saved, AttachmentStream will replace the AttachmentPointer in the attachments collection.
     self = [super initWithUniqueId:pointer.uniqueId];
 
     if (!self) {
