@@ -11,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation TSAttachmentStream
 
-- (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType
+- (instancetype)initWithContentType:(NSString *)contentType
 {
     self = [super init];
     if (!self) {
@@ -21,15 +21,12 @@ NS_ASSUME_NONNULL_BEGIN
     _contentType = contentType;
     _isDownloaded = YES;
 
-    // TODO move to save?
-    [self writeData:data];
-
     return self;
 }
 
-- (instancetype)initWithPointer:(TSAttachmentPointer *)pointer decryptedData:(NSData *)data
+- (instancetype)initWithPointer:(TSAttachmentPointer *)pointer
 {
-    // Once saved, AttachmentStream will replace the AttachmentPointer in the attachments collection.
+    // Once saved, this AttachmentStream will replace the AttachmentPointer in the attachments collection.
     self = [super initWithUniqueId:pointer.uniqueId];
     if (!self) {
         return self;
@@ -37,9 +34,6 @@ NS_ASSUME_NONNULL_BEGIN
 
     _contentType = pointer.contentType;
     _isDownloaded = YES;
-
-    // TODO move to save?
-    [self writeData:data];
 
     return self;
 }
@@ -54,20 +48,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - File Management
 
-- (nullable NSData *)readDataFromFile
+- (nullable NSData *)readDataFromFileWithError:(NSError **)error
 {
-    if (![[NSFileManager defaultManager] fileExistsAtPath:self.filePath]) {
-        DDLogError(@"%@ Can't read data for non existant file at path:%@", self.tag, self.filePath);
-        return nil;
-    }
-
-    return [NSData dataWithContentsOfFile:self.filePath];
+    return [NSData dataWithContentsOfFile:self.filePath options:0 error:error];
 }
 
-- (void)writeData:(NSData *)data
+- (BOOL)writeData:(NSData *)data error:(NSError **)error
 {
     DDLogInfo(@"%@ Created file at %@", self.tag, self.filePath);
-    [[NSFileManager defaultManager] createFileAtPath:self.filePath contents:data attributes:nil];
+    return [data writeToFile:self.filePath options:0 error:error];
 }
 
 + (NSString *)attachmentsFolder

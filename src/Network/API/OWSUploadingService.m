@@ -61,9 +61,17 @@ NS_ASSUME_NONNULL_BEGIN
                 UInt64 serverId = ((NSDecimalNumber *)[responseDict objectForKey:@"id"]).unsignedLongLongValue;
                 NSString *location = [responseDict objectForKey:@"location"];
 
+                NSError *error;
+                NSData *attachmentData = [attachmentStream readDataFromFileWithError:&error];
+                if (error) {
+                    DDLogError(@"%@ Failed to read attachment data with error:%@", self.tag, error);
+                    return failureHandler(error);
+                }
+
                 NSData *encryptionKey;
                 NSData *encryptedAttachmentData =
-                    [Cryptography encryptAttachmentData:attachmentStream.readDataFromFile outKey:&encryptionKey];
+                    [Cryptography encryptAttachmentData:attachmentData outKey:&encryptionKey];
+
                 attachmentStream.encryptionKey = encryptionKey;
 
                 [self uploadDataWithProgress:encryptedAttachmentData

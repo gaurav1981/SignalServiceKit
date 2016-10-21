@@ -12,8 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TSAttachmentStream : TSAttachment
 
-- (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType NS_DESIGNATED_INITIALIZER;
-- (instancetype)initWithPointer:(TSAttachmentPointer *)pointer decryptedData:(NSData *)data NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+- (instancetype)initWithContentType:(NSString *)contentType NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithPointer:(TSAttachmentPointer *)pointer NS_DESIGNATED_INITIALIZER;
 
 @property (atomic, readwrite) BOOL isDownloaded;
 
@@ -25,10 +26,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)isImage;
 - (BOOL)isVideo;
 - (nullable NSString *)filePath;
-- (nullable NSData *)readDataFromFile;
 - (nullable NSURL *)mediaURL;
-
-- (void)writeData:(NSData *)data;
+- (nullable NSData *)readDataFromFileWithError:(NSError **)error;
+- (BOOL)writeData:(NSData *)data error:(NSError **)error;
 
 + (void)deleteAttachments;
 + (NSString *)attachmentsFolder;

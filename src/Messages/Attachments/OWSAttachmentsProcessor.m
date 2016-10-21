@@ -165,7 +165,15 @@ NS_ASSUME_NONNULL_BEGIN
         return failureHandler(error);
     }
 
-    TSAttachmentStream *stream = [[TSAttachmentStream alloc] initWithPointer:attachment decryptedData:plaintext];
+    TSAttachmentStream *stream = [[TSAttachmentStream alloc] initWithPointer:attachment];
+
+    NSError *error;
+    [stream writeData:plaintext error:&error];
+    if (error) {
+        DDLogError(@"%@ Failed writing attachment stream with error: %@", self.tag, error);
+        return failureHandler(error);
+    }
+
     [stream save];
     successHandler(stream);
 }

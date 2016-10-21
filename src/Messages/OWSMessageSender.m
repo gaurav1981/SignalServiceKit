@@ -152,7 +152,15 @@ NSString *const OWSMessageSenderInvalidDeviceException = @"InvalidDeviceExceptio
                    failure:(void (^)(NSError *error))failureHandler
 {
     dispatch_async([OWSDispatch attachmentsQueue], ^{
-        TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithData:data contentType:contentType];
+        TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithContentType:contentType];
+
+        NSError *error;
+        [attachmentStream writeData:data error:&error];
+        if (error) {
+            DDLogError(@"%@ Failed to write data for outgoing attachment with error:%@", self.tag, error);
+            return failureHandler(error);
+        }
+
         [attachmentStream save];
         [message.attachmentIds addObject:attachmentStream.uniqueId];
 

@@ -71,9 +71,9 @@
 
 - (void)testFilesWithoutInteractionsAreDeleted
 {
-    TSAttachmentStream *attachmentStream =
-        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
-
+    NSError *error;
+    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithContentType:@"image/jpeg"];
+    [attachmentStream writeData:[NSData new] error:&error];
     [attachmentStream save];
     NSString *orphanedFilePath = [attachmentStream filePath];
     BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:orphanedFilePath];
@@ -91,8 +91,9 @@
     TSContactThread *savedThread = [[TSContactThread alloc] initWithUniqueId:@"this-thread-exists"];
     [savedThread save];
 
-    TSAttachmentStream *attachmentStream =
-        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
+    NSError *error;
+    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithContentType:@"image/jpeg"];
+    [attachmentStream writeData:[NSData new] error:&error];
     [attachmentStream save];
 
     TSIncomingMessage *incomingMessage = [[TSIncomingMessage alloc] initWithTimestamp:1
@@ -116,13 +117,12 @@
 
 - (void)testFilesWithoutAttachmentStreamsAreDeleted
 {
-    TSAttachmentStream *attachmentStream =
-        [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
-
+    NSError *error;
+    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithContentType:@"image/jpeg"];
+    [attachmentStream writeData:[NSData new] error:&error];
     // Intentionally not saved, because we want a lingering file.
-    // This relies on a bug(?) in the current TSAttachmentStream init implementation where the file is created during
-    // `init` rather than during `save`. If that bug is fixed, we'll have to update this test to manually create the
-    // file to set up the correct initial state.
+
+
     NSString *orphanedFilePath = [attachmentStream filePath];
     BOOL fileExists = [[NSFileManager defaultManager] fileExistsAtPath:orphanedFilePath];
     XCTAssert(fileExists);

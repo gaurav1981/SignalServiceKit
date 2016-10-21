@@ -75,7 +75,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testDescriptionWithPhotoAttachmentId
 {
-    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"image/jpeg"];
+    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithContentType:@"image/jpeg"];
     [attachment save];
 
     TSMessage *message = [[TSMessage alloc] initWithTimestamp:1
@@ -89,7 +89,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testDescriptionWithVideoAttachmentId
 {
-    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"video/mp4"];
+    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithContentType:@"video/mp4"];
     [attachment save];
 
     TSMessage *message = [[TSMessage alloc] initWithTimestamp:1
@@ -103,7 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testDescriptionWithAudioAttachmentId
 {
-    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"audio/mp3"];
+    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithContentType:@"audio/mp3"];
     [attachment save];
 
     TSMessage *message = [[TSMessage alloc] initWithTimestamp:1
@@ -116,7 +116,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)testDescriptionWithUnkownAudioContentType
 {
-    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithData:[NSData new] contentType:@"non/sense"];
+    TSAttachment *attachment = [[TSAttachmentStream alloc] initWithContentType:@"non/sense"];
     [attachment save];
 
     TSMessage *message = [[TSMessage alloc] initWithTimestamp:1
