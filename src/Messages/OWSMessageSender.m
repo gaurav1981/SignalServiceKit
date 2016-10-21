@@ -40,6 +40,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 int const OWSMessageSenderRetryAttempts = 3;
+NSString *const OWSMessageSenderInvalidDeviceException = @"InvalidDeviceException";
 
 @interface OWSMessageSender ()
 
@@ -88,10 +89,7 @@ int const OWSMessageSenderRetryAttempts = 3;
 
     [self ensureAnyAttachmentsUploaded:message
                                success:^() {
-                                   [self sendMessage:message
-                                            inThread:message.thread
-                                             success:successHandler
-                                             failure:markAndFailureHandler];
+                                   [self deliverMessage:message success:successHandler failure:markAndFailureHandler];
                                }
                                failure:markAndFailureHandler];
 }
@@ -194,69 +192,56 @@ int const OWSMessageSenderRetryAttempts = 3;
         };
 
         [self groupSend:@[ failedRecipient ]
-                Message:message
-               inThread:errorMessage.thread
+                message:message
+                 thread:message.thread
                 success:successHandler
                 failure:markAndFailureHandler];
     });
 }
 
-#pragma mark - Methods after this point were mostly cut/paste extracted from old TSMessagesManager+send.h
-//  Created by Frederic Jacobs on 17/11/14.
-//  Copyright (c) 2014 Open Whisper Systems. All rights reserved.
-
-#define InvalidDeviceException @"InvalidDeviceException"
-
-- (void)getRecipients:(NSArray<NSString *> *)identifiers
-              success:(void (^)(NSArray<SignalRecipient *> *))success
-              failure:(void (^)(NSError *error))failure
+- (NSArray<SignalRecipient *> *)getRecipients:(NSArray<NSString *> *)identifiers error:(NSError **)error
 {
     NSMutableArray<SignalRecipient *> *recipients = [NSMutableArray new];
 
-    __block NSError *latestError;
     for (NSString *recipientId in identifiers) {
-        SignalRecipient *recipient = [SignalRecipient recipientWithTextSecureIdentifier:recipientId];
+        SignalRecipient *existingRecipient = [SignalRecipient recipientWithTextSecureIdentifier:recipientId];
 
-        if (!recipient) {
-            NSError *error;
-            SignalRecipient *newRecipient = [self.contactsUpdater synchronousLookup:recipientId error:&error];
+        if (existingRecipient) {
+            [recipients addObject:existingRecipient];
+        } else {
+            SignalRecipient *newRecipient = [self.contactsUpdater synchronousLookup:recipientId error:error];
             if (newRecipient) {
                 [recipients addObject:newRecipient];
             }
-
-            if (error) {
-                DDLogWarn(@"Not sending message to unknown recipient with error: %@", error);
-                latestError = error;
-            };
-        } else {
-            [recipients addObject:recipient];
         }
     }
 
-    if (recipients > 0) {
-        return success(recipients);
+    if (recipients.count > 0 && !*error) {
+        // error should be set in contactsUpater, but just in case.
+        *error = OWSErrorWithCodeDescription(OWSErrorCodeFailedToSendOutgoingMessage, @"Error finding contacts");
     }
 
-    return failure(latestError);
+    return [recipients copy];
 }
 
-- (void)sendMessage:(TSOutgoingMessage *)message
-           inThread:(TSThread *)thread
-            success:(void (^)())successHandler
-            failure:(void (^)(NSError *error))failureHandler
+- (void)deliverMessage:(TSOutgoingMessage *)message
+               success:(void (^)())successHandler
+               failure:(void (^)(NSError *error))failureHandler
 {
+    TSThread *thread = message.thread;
+
     dispatch_async([OWSDispatch sendingQueue], ^{
         if ([thread isKindOfClass:[TSGroupThread class]]) {
-            TSGroupThread *groupThread = (TSGroupThread *)thread;
-            [self getRecipients:groupThread.groupModel.groupMemberIds
-                        success:^(NSArray<SignalRecipient *> *recipients) {
-                            [self groupSend:recipients
-                                    Message:message
-                                   inThread:thread
-                                    success:successHandler
-                                    failure:failureHandler];
-                        }
-                        failure:failureHandler];
+            TSGroupThread *gThread = (TSGroupThread *)thread;
+
+            NSError *error;
+            NSArray<SignalRecipient *> *recipients =
+                [self getRecipients:gThread.groupModel.groupMemberIds error:&error];
+            if (error) {
+                return failureHandler(error);
+            }
+
+            [self groupSend:recipients message:message thread:gThread success:successHandler failure:failureHandler];
 
         } else if ([thread isKindOfClass:[TSContactThread class]]
             || [message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
@@ -286,7 +271,7 @@ int const OWSMessageSenderRetryAttempts = 3;
                 if (error) {
                     if (error.code == NOTFOUND_ERROR) {
                         DDLogWarn(@"recipient contact not found with error: %@", error);
-                        [self unregisteredRecipient:recipient message:message inThread:thread];
+                        [self unregisteredRecipient:recipient message:message thread:thread];
                     }
                     DDLogError(@"contact lookup failed with error: %@", error);
                     return failureHandler(error);
@@ -300,9 +285,9 @@ int const OWSMessageSenderRetryAttempts = 3;
             }
 
             [self sendMessage:message
-                  toRecipient:recipient
-                     inThread:thread
-                  withAttemps:OWSMessageSenderRetryAttempts
+                    recipient:recipient
+                       thread:thread
+                     attempts:OWSMessageSenderRetryAttempts
                       success:successHandler
                       failure:failureHandler];
         }
@@ -313,14 +298,14 @@ int const OWSMessageSenderRetryAttempts = 3;
 
 - (TOCFuture *)sendMessageFuture:(TSOutgoingMessage *)message
                        recipient:(SignalRecipient *)recipient
-                        inThread:(TSThread *)thread
+                          thread:(TSThread *)thread
 {
     TOCFutureSource *futureSource = [[TOCFutureSource alloc] init];
 
     [self sendMessage:message
-        toRecipient:recipient
-        inThread:thread
-        withAttemps:OWSMessageSenderRetryAttempts
+        recipient:recipient
+        thread:thread
+        attempts:OWSMessageSenderRetryAttempts
         success:^{
             [futureSource trySetResult:@1];
         }
@@ -332,8 +317,8 @@ int const OWSMessageSenderRetryAttempts = 3;
 }
 
 - (void)groupSend:(NSArray<SignalRecipient *> *)recipients
-          Message:(TSOutgoingMessage *)message
-         inThread:(TSThread *)thread
+          message:(TSOutgoingMessage *)message
+           thread:(TSThread *)thread
           success:(void (^)())successHandler
           failure:(void (^)(NSError *error))failureHandler
 {
@@ -343,7 +328,7 @@ int const OWSMessageSenderRetryAttempts = 3;
     for (SignalRecipient *rec in recipients) {
         // we don't need to send the message to ourselves, but otherwise we send
         if (![[rec uniqueId] isEqualToString:[TSStorageManager localNumber]]) {
-            [futures addObject:[self sendMessageFuture:message recipient:rec inThread:thread]];
+            [futures addObject:[self sendMessageFuture:message recipient:rec thread:thread]];
         }
     }
 
@@ -366,7 +351,7 @@ int const OWSMessageSenderRetryAttempts = 3;
 
 - (void)unregisteredRecipient:(SignalRecipient *)recipient
                       message:(TSOutgoingMessage *)message
-                     inThread:(TSThread *)thread
+                       thread:(TSThread *)thread
 {
     [self.dbConnection asyncReadWriteWithBlock:^(YapDatabaseReadWriteTransaction *transaction) {
         [recipient removeWithTransaction:transaction];
@@ -376,9 +361,9 @@ int const OWSMessageSenderRetryAttempts = 3;
 }
 
 - (void)sendMessage:(TSOutgoingMessage *)message
-        toRecipient:(SignalRecipient *)recipient
-           inThread:(TSThread *)thread
-        withAttemps:(int)remainingAttempts
+          recipient:(SignalRecipient *)recipient
+             thread:(TSThread *)thread
+           attempts:(int)remainingAttempts
             success:(void (^)())successHandler
             failure:(void (^)(NSError *error))failureHandler
 {
@@ -419,10 +404,20 @@ int const OWSMessageSenderRetryAttempts = 3;
             long statuscode = response.statusCode;
             NSData *responseData = error.userInfo[AFNetworkingOperationFailingURLResponseDataErrorKey];
 
+            void (^retrySend)() = ^void() {
+                dispatch_async([OWSDispatch sendingQueue], ^{
+                    [self sendMessage:message
+                            recipient:recipient
+                               thread:thread
+                             attempts:remainingAttempts
+                              success:successHandler
+                              failure:failureHandler];
+                });
+            };
+
             switch (statuscode) {
                 case 404: {
-                    // TODO move error handling into failureHandler
-                    [self unregisteredRecipient:recipient message:message inThread:thread];
+                    [self unregisteredRecipient:recipient message:message thread:thread];
                     NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
                     return failureHandler(error);
                 }
@@ -430,25 +425,16 @@ int const OWSMessageSenderRetryAttempts = 3;
                     // Mismatched devices
                     DDLogWarn(@"%@ Mismatch Devices.", self.tag);
 
-                    NSError *e;
+                    NSError *error;
                     NSDictionary *serializedResponse =
-                        [NSJSONSerialization JSONObjectWithData:responseData options:0 error:&e];
-
-                    if (e) {
-                        DDLogError(@"%@ Failed to serialize response of mismatched devices: %@", self.tag, e);
-                    } else {
-                        [self handleMismatchedDevices:serializedResponse recipient:recipient];
+                        [NSJSONSerialization JSONObjectWithData:responseData options:0 error:&error];
+                    if (error) {
+                        DDLogError(@"%@ Failed to serialize response of mismatched devices: %@", self.tag, error);
+                        return failureHandler(error);
                     }
 
-                    dispatch_async([OWSDispatch sendingQueue], ^{
-                        [self sendMessage:message
-                              toRecipient:recipient
-                                 inThread:thread
-                              withAttemps:remainingAttempts
-                                  success:successHandler
-                                  failure:failureHandler];
-                    });
-
+                    [self handleMismatchedDevices:serializedResponse recipient:recipient];
+                    retrySend();
                     break;
                 }
                 case 410: {
@@ -462,25 +448,11 @@ int const OWSMessageSenderRetryAttempts = 3;
                     }
 
                     [self handleStaleDevicesWithResponse:responseData recipientId:recipient.uniqueId];
-
-                    dispatch_async([OWSDispatch sendingQueue], ^{
-                        [self sendMessage:message
-                              toRecipient:recipient
-                                 inThread:thread
-                              withAttemps:remainingAttempts
-                                  success:successHandler
-                                  failure:failureHandler];
-                    });
-
+                    retrySend();
                     break;
                 }
                 default:
-                    [self sendMessage:message
-                          toRecipient:recipient
-                             inThread:thread
-                          withAttemps:remainingAttempts
-                              success:successHandler
-                              failure:failureHandler];
+                    retrySend();
                     break;
             }
         }];
@@ -554,9 +526,9 @@ int const OWSMessageSenderRetryAttempts = 3;
         [[OWSOutgoingSentMessageTranscript alloc] initWithOutgoingMessage:message];
 
     [self sendMessage:sentMessageTranscript
-        toRecipient:[SignalRecipient selfRecipient]
-        inThread:message.thread
-        withAttemps:OWSMessageSenderRetryAttempts
+        recipient:[SignalRecipient selfRecipient]
+        thread:message.thread
+        attempts:OWSMessageSenderRetryAttempts
         success:^{
             DDLogInfo(@"Succesfully sent sync transcript.");
         }
@@ -590,7 +562,7 @@ int const OWSMessageSenderRetryAttempts = 3;
                                              userInfo:nil];
             }
         } @catch (NSException *exception) {
-            if ([exception.name isEqualToString:InvalidDeviceException]) {
+            if ([exception.name isEqualToString:OWSMessageSenderInvalidDeviceException]) {
                 [recipient removeDevices:[NSSet setWithObject:deviceNumber]];
             } else {
                 @throw exception;
@@ -621,7 +593,7 @@ int const OWSMessageSenderRetryAttempts = 3;
                 DDLogError(@"Server replied on PreKeyBundle request with error: %@", error);
                 NSHTTPURLResponse *response = (NSHTTPURLResponse *)task.response;
                 if (response.statusCode == 404) {
-                    @throw [NSException exceptionWithName:InvalidDeviceException
+                    @throw [NSException exceptionWithName:OWSMessageSenderInvalidDeviceException
                                                    reason:@"Device not registered"
                                                  userInfo:nil];
                 }
