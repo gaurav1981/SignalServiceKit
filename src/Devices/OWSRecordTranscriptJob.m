@@ -67,7 +67,7 @@ NS_ASSUME_NONNULL_BEGIN
     [self.messageSender handleMessageSentRemotely:outgoingMessage sentAt:transcript.expirationStartedAt];
 
     [attachmentsProcessor
-        fetchAttachmentsForMessage:nil
+        fetchAttachmentsForMessage:outgoingMessage
                            success:attachmentHandler
                            failure:^(NSError *_Nonnull error) {
                                DDLogError(@"%@ failed to fetch transcripts attachments for message: %@",
