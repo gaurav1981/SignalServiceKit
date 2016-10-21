@@ -107,6 +107,7 @@ int const OWSMessageSenderRetryAttempts = 3;
 
     TSAttachmentStream *attachmentStream =
         [TSAttachmentStream fetchObjectWithUniqueID:message.attachmentIds.firstObject];
+
     if (!attachmentStream) {
         DDLogError(@"%@ Unable to find local saved attachment to upload.", self.tag);
         NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
@@ -152,15 +153,16 @@ int const OWSMessageSenderRetryAttempts = 3;
                    success:(void (^)())successHandler
                    failure:(void (^)(NSError *error))failureHandler
 {
-    // TODO background queue since this writes to disk, or move whole method call to queue.
-    TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithData:data contentType:contentType];
-    [attachmentStream save];
-    [message.attachmentIds addObject:attachmentStream.uniqueId];
+    dispatch_async([OWSDispatch attachmentsQueue], ^{
+        TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithData:data contentType:contentType];
+        [attachmentStream save];
+        [message.attachmentIds addObject:attachmentStream.uniqueId];
 
-    message.messageState = TSOutgoingMessageStateAttemptingOut;
-    [message save];
+        message.messageState = TSOutgoingMessageStateAttemptingOut;
+        [message save];
 
-    [self sendMessage:message success:successHandler failure:failureHandler];
+        [self sendMessage:message success:successHandler failure:failureHandler];
+    });
 }
 
 - (void)resendMessageFromKeyError:(TSInvalidIdentityKeySendingErrorMessage *)errorMessage
@@ -168,8 +170,7 @@ int const OWSMessageSenderRetryAttempts = 3;
                           failure:(void (^)(NSError *error))failureHandler
 {
     TSOutgoingMessage *message = [TSOutgoingMessage fetchObjectWithUniqueID:errorMessage.messageId];
-    TSThread *thread = errorMessage.thread;
-    SignalRecipient *recipient = [SignalRecipient fetchObjectWithUniqueID:errorMessage.recipientId];
+
     // Here we remove the existing error message because sending a new message will either
     //  1.) succeed and create a new successful message in the thread or...
     //  2.) fail and create a new identical error message in the thread.
@@ -179,15 +180,22 @@ int const OWSMessageSenderRetryAttempts = 3;
         return [self sendMessage:message success:successHandler failure:failureHandler];
     }
 
+    // else it's a GroupThread
     dispatch_async([OWSDispatch sendingQueue], ^{
+
+        // Avoid spamming entire group when resending failed message.
+        SignalRecipient *failedRecipient = [SignalRecipient fetchObjectWithUniqueID:errorMessage.recipientId];
+
+        // Normally marking as unsent is handled in sendMessage happy path, but beacuse we're skipping the common entry
+        // point to message sending in order to send to a single recipient, we have to handle it ourselves.
         void (^markAndFailureHandler)(NSError *error) = ^(NSError *error) {
             [self saveMessage:message withState:TSOutgoingMessageStateUnsent];
             failureHandler(error);
         };
 
-        [self groupSend:@[ recipient ] // Avoid spamming entire group when resending failed message.
+        [self groupSend:@[ failedRecipient ]
                 Message:message
-               inThread:thread
+               inThread:errorMessage.thread
                 success:successHandler
                 failure:markAndFailureHandler];
     });

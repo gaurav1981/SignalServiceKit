@@ -43,6 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
                  inMessage:(TSOutgoingMessage *)outgoingMessage
                    success:(void (^)())successHandler
                    failure:(void (^)(NSError *error))failureHandler;
+
 /**
  * Same as `sendAttachmentData:`, but deletes the local copy of the attachment after sending.
  * Used for sending sync request data, not for user visible attachments.
@@ -54,7 +55,7 @@ NS_ASSUME_NONNULL_BEGIN
                             failure:(void (^)(NSError *error))failureHandler;
 
 /**
- * Resend a message to a select recipient in a thread.
+ * Resend a message to a select recipient in a thread when previous sending failed due to key error.
  * e.g. If a key change prevents one recipient from receiving the message, we don't want to resend to the entire group.
  */
 - (void)resendMessageFromKeyError:(TSInvalidIdentityKeySendingErrorMessage *)errorMessage
@@ -62,6 +63,13 @@ NS_ASSUME_NONNULL_BEGIN
                           failure:(void (^)(NSError *error))failureHandler;
 
 - (void)handleMessageSentRemotely:(TSOutgoingMessage *)message sentAt:(uint64_t)sentAt;
+
+/**
+ * Set local configuration to match that of the of `outgoingMessage`'s sender
+ *
+ * We do this because messages and async message latency make it possible for thread participants disappearing messags
+ * configuration to get out of sync.
+ */
 - (void)becomeConsistentWithDisappearingConfigurationForMessage:(TSOutgoingMessage *)outgoingMessage;
 
 @end

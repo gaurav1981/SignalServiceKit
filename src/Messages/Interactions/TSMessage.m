@@ -134,16 +134,6 @@ static const NSUInteger OWSMessageSchemaVersion = 3;
     return self;
 }
 
-- (void)enumerateAttachmentPointersWithBlock:(void (^)(TSAttachmentPointer *attachment))block
-{
-    for (NSString *attachmentId in self.attachmentIds) {
-        TSAttachment *attachment = [TSAttachment fetchObjectWithUniqueID:attachmentId];
-        if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
-            block((TSAttachmentPointer *)attachment);
-        }
-    }
-}
-
 - (void)setexpiresInSeconds:(uint32_t)expiresInSeconds
 {
     _expiresInSeconds = expiresInSeconds;

@@ -58,8 +58,6 @@ typedef NS_ENUM(NSInteger, TSGroupMetaMessage) {
 
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_DESIGNATED_INITIALIZER;
 
-- (void)enumerateAttachmentPointersWithBlock:(void (^)(TSAttachmentPointer *attachment))block;
-
 - (BOOL)hasAttachments;
 
 @end
