@@ -15,8 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithPointer:(TSAttachmentPointer *)pointer decryptedData:(NSData *)data NS_DESIGNATED_INITIALIZER;
 
-// Override superclass to be readwrite
-@property (nonatomic) BOOL isDownloaded;
+@property (atomic, readwrite) BOOL isDownloaded;
 
 #if TARGET_OS_IPHONE
 - (nullable UIImage *)image;

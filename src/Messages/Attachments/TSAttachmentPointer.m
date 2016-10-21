@@ -17,30 +17,12 @@ NS_ASSUME_NONNULL_BEGIN
         return self;
     }
 
-    _failed = FALSE;
-    _downloading = FALSE;
+    _failed = NO;
+    _downloading = NO;
     _relay = relay;
 
     return self;
 }
-
-
-- (instancetype)initWithServerId:(UInt64)serverId
-                             key:(NSData *)key
-                     contentType:(NSString *)contentType
-                           relay:(NSString *)relay
-                 avatarOfGroupId:(NSData *)avatarOfGroupId
-{
-    self = [self initWithServerId:serverId key:key contentType:contentType relay:relay];
-    if (!self) {
-        return self;
-    }
-
-    _avatarOfGroupId = avatarOfGroupId;
-
-    return self;
-}
-
 
 - (BOOL)isDownloaded {
     return NO;

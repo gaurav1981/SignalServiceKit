@@ -15,17 +15,9 @@ NS_ASSUME_NONNULL_BEGIN
                      contentType:(NSString *)contentType
                            relay:(NSString *)relay NS_DESIGNATED_INITIALIZER;
 
-- (instancetype)initWithServerId:(UInt64)serverId
-                             key:(NSData *)key
-                     contentType:(NSString *)contentType
-                           relay:(NSString *)relay
-                 avatarOfGroupId:(NSData *)avatarOfGroupId;
-
 @property (nonatomic, readonly) NSString *relay;
-@property (nonatomic, readonly) NSData *avatarOfGroupId;
-
-@property (getter=isDownloading) BOOL downloading;
-@property (getter=hasFailed) BOOL failed;
+@property (atomic, readwrite, getter=isDownloading) BOOL downloading;
+@property (atomic, readwrite, getter=hasFailed) BOOL failed;
 
 @end
 

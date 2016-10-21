@@ -46,12 +46,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - TSYapDatabaseModel overrides
 
-- (void)saveWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
-{
-
-    [super saveWithTransaction:transaction];
-}
-
 - (void)removeWithTransaction:(YapDatabaseReadWriteTransaction *)transaction
 {
     [super removeWithTransaction:transaction];

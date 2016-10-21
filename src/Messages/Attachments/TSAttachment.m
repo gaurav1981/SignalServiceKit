@@ -6,6 +6,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+NSUInteger const TSAttachmentSchemaVersion = 2;
+
 @interface TSAttachment ()
 
 @property (nonatomic, readonly) NSUInteger attachmentSchemaVersion;
@@ -26,6 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
     _serverId = serverId;
     _encryptionKey = encryptionKey;
     _contentType = contentType;
+    _attachmentSchemaVersion = TSAttachmentSchemaVersion;
 
     return self;
 }
@@ -37,12 +40,16 @@ NS_ASSUME_NONNULL_BEGIN
         return self;
     }
 
-    if (!_serverId) {
-        _serverId = [self.uniqueId integerValue];
+    if (_attachmentSchemaVersion < 2) {
         if (!_serverId) {
-            DDLogError(@"%@ failed to parse legacy uniqueId:%@ as integer.", self.tag, self.uniqueId);
+            _serverId = [self.uniqueId integerValue];
+            if (!_serverId) {
+                DDLogError(@"%@ failed to parse legacy uniqueId:%@ as integer.", self.tag, self.uniqueId);
+            }
         }
     }
+
+    _attachmentSchemaVersion = TSAttachmentSchemaVersion;
 
     return self;
 }
