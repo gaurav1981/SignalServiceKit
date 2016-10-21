@@ -36,6 +36,8 @@ NS_ASSUME_NONNULL_BEGIN
         return self;
     }
 
+    _networkManager = networkManager;
+
     _supportedAttachmentPointers = @[ attachmentPointer ];
     _supportedAttachmentIds = @[ attachmentPointer.uniqueId ];
 
@@ -143,8 +145,6 @@ NS_ASSUME_NONNULL_BEGIN
                                                                                 failure:markAndHandleFailure];
                                                         }
                                                         failure:markAndHandleFailure];
-
-
                                  });
                              }
                              failure:^(NSURLSessionDataTask *task, NSError *error) {

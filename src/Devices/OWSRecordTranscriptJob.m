@@ -30,9 +30,9 @@ NS_ASSUME_NONNULL_BEGIN
         return self;
     }
 
+    _incomingSentMessageTranscript = incomingSentMessageTranscript;
     _messageSender = messageSender;
     _networkManager = networkManager;
-    _incomingSentMessageTranscript = incomingSentMessageTranscript;
 
     return self;
 }
@@ -43,11 +43,11 @@ NS_ASSUME_NONNULL_BEGIN
     DDLogDebug(@"%@ Recording transcript: %@", self.tag, transcript);
     TSThread *thread = transcript.thread;
     OWSAttachmentsProcessor *attachmentsProcessor =
-    [[OWSAttachmentsProcessor alloc] initWithAttachmentProtos:transcript.attachmentPointerProtos
-                                                    timestamp:transcript.timestamp
-                                                        relay:transcript.relay
-                                                       thread:thread
-                                               networkManager:self.networkManager];
+        [[OWSAttachmentsProcessor alloc] initWithAttachmentProtos:transcript.attachmentPointerProtos
+                                                        timestamp:transcript.timestamp
+                                                            relay:transcript.relay
+                                                           thread:thread
+                                                   networkManager:self.networkManager];
 
     // TODO group updates. Currently desktop doesn't support group updates, so not a problem yet.
     TSOutgoingMessage *outgoingMessage =

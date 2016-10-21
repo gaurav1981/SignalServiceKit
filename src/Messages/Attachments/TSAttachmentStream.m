@@ -11,10 +11,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation TSAttachmentStream
 
-@synthesize encryptionKey = _encryptionKey,
-            serverId = _serverId,
-            contentType = _contentType;
-
 - (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType
 {
     self = [super init];
@@ -35,7 +31,6 @@ NS_ASSUME_NONNULL_BEGIN
 {
     // Once saved, AttachmentStream will replace the AttachmentPointer in the attachments collection.
     self = [super initWithUniqueId:pointer.uniqueId];
-
     if (!self) {
         return self;
     }
