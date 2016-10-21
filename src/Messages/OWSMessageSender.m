@@ -218,14 +218,16 @@ int const OWSMessageSenderRetryAttempts = 3;
         SignalRecipient *recipient = [SignalRecipient recipientWithTextSecureIdentifier:recipientId];
 
         if (!recipient) {
-            [self.contactsUpdater synchronousLookup:recipientId
-                success:^(SignalRecipient *newRecipient) {
-                    [recipients addObject:newRecipient];
-                }
-                failure:^(NSError *error) {
-                    DDLogWarn(@"Not sending message to unknown recipient with error: %@", error);
-                    latestError = error;
-                }];
+            NSError *error;
+            SignalRecipient *newRecipient = [self.contactsUpdater synchronousLookup:recipientId error:&error];
+            if (newRecipient) {
+                [recipients addObject:newRecipient];
+            }
+
+            if (error) {
+                DDLogWarn(@"Not sending message to unknown recipient with error: %@", error);
+                latestError = error;
+            };
         } else {
             [recipients addObject:recipient];
         }
@@ -263,44 +265,46 @@ int const OWSMessageSenderRetryAttempts = 3;
 
             [self saveMessage:message withState:TSOutgoingMessageStateAttemptingOut];
 
-            if (![contactThread.contactIdentifier isEqualToString:self.storageManager.localNumber] ||
-                [message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
+            if ([contactThread.contactIdentifier isEqualToString:self.storageManager.localNumber]
+                && ![message isKindOfClass:[OWSOutgoingSyncMessage class]]) {
 
-                NSString *recipientContactId = [message isKindOfClass:[OWSOutgoingSyncMessage class]]
-                    ? self.storageManager.localNumber
-                    : contactThread.contactIdentifier;
-
-                __block SignalRecipient *recipient =
-                    [SignalRecipient recipientWithTextSecureIdentifier:recipientContactId];
-                if (!recipient) {
-                    [self.contactsUpdater synchronousLookup:contactThread.contactIdentifier
-                        success:^(SignalRecipient *recip) {
-                            recipient = recip;
-                        }
-                        failure:^(NSError *error) {
-                            if (error.code == NOTFOUND_ERROR) {
-                                DDLogWarn(@"recipient contact not found with error: %@", error);
-                                [self unregisteredRecipient:recipient message:message inThread:thread];
-                            }
-                            DDLogError(@"contact lookup failed with error: %@", error);
-                            return failureHandler(error);
-                        }];
-                }
-
-                if (recipient) {
-                    [self sendMessage:message
-                          toRecipient:recipient
-                             inThread:thread
-                          withAttemps:OWSMessageSenderRetryAttempts
-                              success:successHandler
-                              failure:failureHandler];
-                }
-
-            } else {
-                // Special situation: if we are sending to ourselves in a single thread, we treat this as an incoming
-                // message
                 [self handleSendToMyself:message];
+                return;
             }
+
+            NSString *recipientContactId = [message isKindOfClass:[OWSOutgoingSyncMessage class]]
+                ? self.storageManager.localNumber
+                : contactThread.contactIdentifier;
+
+            __block SignalRecipient *recipient = [SignalRecipient recipientWithTextSecureIdentifier:recipientContactId];
+            if (!recipient) {
+
+                NSError *error;
+                // possibly returns nil.
+                recipient = [self.contactsUpdater synchronousLookup:contactThread.contactIdentifier error:&error];
+
+                if (error) {
+                    if (error.code == NOTFOUND_ERROR) {
+                        DDLogWarn(@"recipient contact not found with error: %@", error);
+                        [self unregisteredRecipient:recipient message:message inThread:thread];
+                    }
+                    DDLogError(@"contact lookup failed with error: %@", error);
+                    return failureHandler(error);
+                }
+            }
+
+            if (!recipient) {
+                NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
+                DDLogWarn(@"recipient contact still not found after attempting lookup.");
+                return failureHandler(error);
+            }
+
+            [self sendMessage:message
+                  toRecipient:recipient
+                     inThread:thread
+                  withAttemps:OWSMessageSenderRetryAttempts
+                      success:successHandler
+                      failure:failureHandler];
         }
     });
 }
