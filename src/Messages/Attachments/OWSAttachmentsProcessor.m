@@ -1,23 +1,23 @@
 //  Copyright © 2016 Open Whisper Systems. All rights reserved.
 
 #import "OWSAttachmentsProcessor.h"
+#import "Cryptography.h"
 #import "MIMETypeUtil.h"
-#import "OWSSignalServiceProtos.pb.h"
+#import "OWSDispatch.h"
 #import "OWSError.h"
+#import "OWSSignalServiceProtos.pb.h"
 #import "TSAttachmentPointer.h"
+#import "TSAttachmentRequest.h"
+#import "TSAttachmentStream.h"
+#import "TSGroupModel.h"
+#import "TSGroupThread.h"
 #import "TSInfoMessage.h"
 #import "TSMessage.h"
-#import "TSThread.h"
-#import "TSGroupThread.h"
-#import "TSGroupModel.h"
-#import "TSAttachmentRequest.h"
-#import "OWSDispatch.h"
-#import "Cryptography.h"
 #import "TSNetworkManager.h"
+#import "TSThread.h"
 #import <YapDatabase/YapDatabaseConnection.h>
 
 NS_ASSUME_NONNULL_BEGIN
-
 
 @interface OWSAttachmentsProcessor ()
 

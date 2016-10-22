@@ -53,8 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
                 if (![responseObject isKindOfClass:[NSDictionary class]]) {
                     DDLogError(@"%@ unexpected response from server: %@", self.tag, responseObject);
                     NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
-                    failureHandler(error);
-                    return;
+                    return failureHandler(error);
                 }
 
                 NSDictionary *responseDict = (NSDictionary *)responseObject;
@@ -123,18 +122,16 @@ NS_ASSUME_NONNULL_BEGIN
                                             }];
         }
         completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-            NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
-            BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
             if (error) {
-                failureHandler(error);
-                return;
+                return failureHandler(error);
             }
 
+            NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
+            BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
             if (!isValidResponse) {
                 DDLogError(@"%@ Unexpected server response: %d", self.tag, (int)statusCode);
                 NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
-                failureHandler(invalidResponseError);
-                return;
+                return failureHandler(invalidResponseError);
             }
 
             successHandler();

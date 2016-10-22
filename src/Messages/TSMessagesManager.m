@@ -49,12 +49,12 @@ NS_ASSUME_NONNULL_BEGIN
     static TSMessagesManager *sharedMyManager = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-      sharedMyManager = [[self alloc] init];
+        sharedMyManager = [[self alloc] initDefault];
     });
     return sharedMyManager;
 }
 
-- (instancetype)init
+- (instancetype)initDefault
 {
     TSNetworkManager *networkManager = [TSNetworkManager sharedManager];
     TSStorageManager *storageManager = [TSStorageManager sharedManager];
@@ -95,6 +95,8 @@ NS_ASSUME_NONNULL_BEGIN
 
     return self;
 }
+
+#pragma mark - message handling
 
 - (void)handleReceivedEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
 {
@@ -280,13 +282,6 @@ NS_ASSUME_NONNULL_BEGIN
         DDLogVerbose(@"%@ Received data message.", self.tag);
         [self handleReceivedTextMessageWithEnvelope:incomingEnvelope dataMessage:dataMessage];
     }
-}
-
-- (BOOL)isDataMessageGroupAvatarUpdate:(OWSSignalServiceProtosDataMessage *)dataMessage
-{
-    return dataMessage.hasGroup
-        && dataMessage.group.type == OWSSignalServiceProtosGroupContextTypeUpdate
-        && dataMessage.group.hasAvatar;
 }
 
 - (void)handleReceivedGroupAvatarUpdateWithEnvelope:(OWSSignalServiceProtosEnvelope *)envelope
@@ -590,53 +585,6 @@ NS_ASSUME_NONNULL_BEGIN
     return incomingMessage;
 }
 
-- (void)becomeConsistentWithConfigurationForMessage:(TSMessage *)message
-{
-    // Become eventually consistent in the case that the remote changed their settings at the same time.
-    // Also in case remote doesn't support expiring messages
-    OWSDisappearingMessagesConfiguration *disappearingMessagesConfiguration =
-        [OWSDisappearingMessagesConfiguration fetchObjectWithUniqueID:message.uniqueThreadId];
-
-    BOOL changed = NO;
-    if (message.expiresInSeconds == 0) {
-        if (disappearingMessagesConfiguration.isEnabled) {
-            changed = YES;
-            DDLogWarn(@"%@ Received remote message which had no expiration set, disabling our expiration to become "
-                      @"consistent.",
-                self.tag);
-            disappearingMessagesConfiguration.enabled = NO;
-            [disappearingMessagesConfiguration save];
-        }
-    } else if (message.expiresInSeconds != disappearingMessagesConfiguration.durationSeconds) {
-        changed = YES;
-        DDLogInfo(
-            @"%@ Received remote message with different expiration set, updating our expiration to become consistent.",
-            self.tag);
-        disappearingMessagesConfiguration.enabled = YES;
-        disappearingMessagesConfiguration.durationSeconds = message.expiresInSeconds;
-        [disappearingMessagesConfiguration save];
-    }
-
-    if (!changed) {
-        return;
-    }
-
-    if ([message isKindOfClass:[TSIncomingMessage class]]) {
-        TSIncomingMessage *incomingMessage = (TSIncomingMessage *)message;
-        NSString *contactName = [self.contactsManager nameStringForPhoneIdentifier:incomingMessage.authorId];
-
-        [[[OWSDisappearingConfigurationUpdateInfoMessage alloc] initWithTimestamp:message.timestamp
-                                                                           thread:message.thread
-                                                                    configuration:disappearingMessagesConfiguration
-                                                              createdByRemoteName:contactName] save];
-    } else {
-        [[[OWSDisappearingConfigurationUpdateInfoMessage alloc] initWithTimestamp:message.timestamp
-                                                                           thread:message.thread
-                                                                    configuration:disappearingMessagesConfiguration]
-            save];
-    }
-}
-
 - (void)processException:(NSException *)exception envelope:(OWSSignalServiceProtosEnvelope *)envelope
 {
     DDLogError(@"%@ Got exception: %@ of type: %@", self.tag, exception.description, exception.name);
@@ -663,6 +611,15 @@ NS_ASSUME_NONNULL_BEGIN
 
       [errorMessage saveWithTransaction:transaction];
     }];
+}
+
+#pragma mark - helpers
+
+- (BOOL)isDataMessageGroupAvatarUpdate:(OWSSignalServiceProtosDataMessage *)dataMessage
+{
+    return dataMessage.hasGroup
+        && dataMessage.group.type == OWSSignalServiceProtosGroupContextTypeUpdate
+        && dataMessage.group.hasAvatar;
 }
 
 - (TSThread *)threadForEnvelope:(OWSSignalServiceProtosEnvelope *)envelope

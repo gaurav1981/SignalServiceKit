@@ -179,7 +179,6 @@ NS_ASSUME_NONNULL_BEGIN
                                                        expiresInSeconds:30];
     [self.expiringMessage save];
 
-
     TSStorageManager *storageManager = [TSStorageManager sharedManager];
     OWSFakeContactsManager *contactsManager = [OWSFakeContactsManager new];
     OWSFakeContactsUpdater *contactsUpdater = [OWSFakeContactsUpdater new];
@@ -379,7 +378,6 @@ NS_ASSUME_NONNULL_BEGIN
 
     [self waitForExpectationsWithTimeout:5 handler:nil];
 }
-
 
 @end
 

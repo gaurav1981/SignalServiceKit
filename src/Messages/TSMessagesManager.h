@@ -18,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TSMessagesManager : NSObject
 
+- (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithNetworkManager:(TSNetworkManager *)networkManager
                         storageManager:(TSStorageManager *)storageManager
                        contactsManager:(id<ContactsManagerProtocol>)contactsManager
